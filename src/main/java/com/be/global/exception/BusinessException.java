@@ -1,4 +1,4 @@
-package com.be.global;
+package com.be.global.exception;
 
 public class BusinessException extends RuntimeException {
     private final ErrorCode errorCode;

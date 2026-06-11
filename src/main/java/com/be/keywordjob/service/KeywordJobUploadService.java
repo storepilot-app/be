@@ -1,7 +1,7 @@
 package com.be.keywordjob.service;
 
-import com.be.global.BusinessException;
-import com.be.global.ErrorCode;
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

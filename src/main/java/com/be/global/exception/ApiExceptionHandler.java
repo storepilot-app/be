@@ -1,4 +1,4 @@
-package com.be.global;
+package com.be.global.exception;
 
 import com.be.global.response.CommonResponse;
 import org.springframework.http.HttpStatus;

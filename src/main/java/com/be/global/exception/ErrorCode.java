@@ -1,4 +1,4 @@
-package com.be.global;
+package com.be.global.exception;
 
 public enum ErrorCode {
     INVALID_EXCEL_FILE,
