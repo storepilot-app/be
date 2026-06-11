@@ -1,5 +1,6 @@
 package com.be.global;
 
+import com.be.global.response.CommonResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -10,23 +11,29 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @RestControllerAdvice
 public class ApiExceptionHandler {
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException exception) {
+    public ResponseEntity<CommonResponse<Void>> handleBusinessException(BusinessException exception) {
         HttpStatus status = exception.getErrorCode() == ErrorCode.INVALID_EXCEL_FILE
                 ? HttpStatus.BAD_REQUEST
                 : HttpStatus.UNPROCESSABLE_ENTITY;
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(exception.getErrorCode(), exception.getMessage()));
+                .body(CommonResponse.fail(exception.getErrorCode().name(), exception.getMessage()));
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException exception) {
+    public ResponseEntity<CommonResponse<Void>> handleMissingParameter(MissingServletRequestParameterException exception) {
         return ResponseEntity.badRequest()
-                .body(new ErrorResponse(ErrorCode.INTERNAL_SERVER_ERROR, "필수 요청 값이 누락되었습니다: " + exception.getParameterName()));
+                .body(CommonResponse.fail(
+                        ErrorCode.INTERNAL_SERVER_ERROR.name(),
+                        "필수 요청 값이 누락되었습니다: " + exception.getParameterName()
+                ));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded() {
+    public ResponseEntity<CommonResponse<Void>> handleMaxUploadSizeExceeded() {
         return ResponseEntity.badRequest()
-                .body(new ErrorResponse(ErrorCode.INVALID_EXCEL_FILE, "업로드 가능한 파일 크기를 초과했습니다."));
+                .body(CommonResponse.fail(
+                        ErrorCode.INVALID_EXCEL_FILE.name(),
+                        "업로드 가능한 파일 크기를 초과했습니다."
+                ));
     }
 }

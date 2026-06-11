@@ -1,8 +1,8 @@
 package com.be.keywordjob.controller;
 
+import com.be.global.response.CommonResponse;
 import com.be.keywordjob.domain.KeywordJob;
 import com.be.keywordjob.dto.KeywordJobUploadResponse;
-import com.be.global.ErrorResponse;
 import com.be.keywordjob.service.KeywordJobUploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,12 +35,18 @@ public class KeywordJobController {
                             description = "작업 등록 성공",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = KeywordJobUploadResponse.class),
+                                    schema = @Schema(implementation = CommonResponse.class),
                                     examples = @ExampleObject(value = """
                                             {
-                                              "jobId": 1,
-                                              "status": "PENDING",
-                                              "message": "키워드 생성 작업이 등록되었습니다."
+                                              "success": true,
+                                              "data": {
+                                                "jobId": 1,
+                                                "status": "PENDING",
+                                                "message": "키워드 생성 작업이 등록되었습니다."
+                                              },
+                                              "message": "키워드 생성 작업이 등록되었습니다.",
+                                              "code": null,
+                                              "errors": null
                                             }
                                             """)
                             )
@@ -50,11 +56,14 @@ public class KeywordJobController {
                             description = "엑셀 파일 오류 또는 필수 요청 값 누락",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = ErrorResponse.class),
+                                    schema = @Schema(implementation = CommonResponse.class),
                                     examples = @ExampleObject(value = """
                                             {
-                                              "errorCode": "INVALID_EXCEL_FILE",
-                                              "message": "엑셀 파일 형식이 올바르지 않습니다."
+                                              "success": false,
+                                              "data": null,
+                                              "message": "엑셀 파일 형식이 올바르지 않습니다.",
+                                              "code": "INVALID_EXCEL_FILE",
+                                              "errors": null
                                             }
                                             """)
                             )
@@ -64,13 +73,13 @@ public class KeywordJobController {
                             description = "요청 값 검증 실패",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = ErrorResponse.class)
+                                    schema = @Schema(implementation = CommonResponse.class)
                             )
                     )
             }
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public KeywordJobUploadResponse upload(
+    public CommonResponse<KeywordJobUploadResponse> upload(
             @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
@@ -81,10 +90,11 @@ public class KeywordJobController {
             @RequestParam(value = "keywordCount", required = false) Integer keywordCount
     ) {
         KeywordJob job = keywordJobUploadService.upload(file, productNameColumn, categoryColumn, keywordCount);
-        return new KeywordJobUploadResponse(
+        KeywordJobUploadResponse response = new KeywordJobUploadResponse(
                 job.getJobId(),
                 job.getStatus(),
                 "키워드 생성 작업이 등록되었습니다."
         );
+        return CommonResponse.success(response, response.message());
     }
 }
