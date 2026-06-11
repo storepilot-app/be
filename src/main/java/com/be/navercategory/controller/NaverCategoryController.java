@@ -63,11 +63,11 @@ public class NaverCategoryController {
     ) {
         NaverCategoryVersion version = naverCategoryUploadService.upload(file);
         NaverCategoryUploadResponse response = new NaverCategoryUploadResponse(
-                version.versionId(),
-                version.sourceFilename(),
-                version.rowCount(),
-                version.categoryCount(),
-                version.csvFilePath().toString(),
+                version.getId(),
+                version.getSourceFilename(),
+                version.getRowCount(),
+                version.getCategoryCount(),
+                version.getCsvFilePath(),
                 "Naver categories uploaded."
         );
         return CommonResponse.success(response, response.message());

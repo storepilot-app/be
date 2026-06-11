@@ -5,6 +5,7 @@ import com.be.global.exception.ErrorCode;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
+import com.be.navercategory.repository.NaverCategoryVersionRepository;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -26,6 +26,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -38,17 +39,18 @@ public class NaverCategoryUploadService {
     private static final String HEADER_LEVEL4 = "4차카테";
 
     private final NaverCategoryRepository naverCategoryRepository;
-    private final AtomicLong versionIdGenerator = new AtomicLong(1);
+    private final NaverCategoryVersionRepository naverCategoryVersionRepository;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
+    @Transactional
     public NaverCategoryVersion upload(MultipartFile file) {
         validateFile(file);
 
-        long versionId = versionIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
-        Path versionDir = uploadRoot().resolve("naver-categories").resolve("versions").resolve(String.valueOf(versionId));
+        String uploadKey = String.valueOf(System.currentTimeMillis());
+        Path versionDir = uploadRoot().resolve("naver-categories").resolve("versions").resolve(uploadKey);
         Path uploadedFilePath = versionDir.resolve(filename).normalize();
         Path csvFilePath = uploadRoot().resolve("naver-categories").resolve("active").resolve("naver_categories.csv").normalize();
 
@@ -62,17 +64,22 @@ public class NaverCategoryUploadService {
                 throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Naver category file has no category rows.");
             }
 
-            writeCsv(csvFilePath, categories);
-            NaverCategoryVersion version = new NaverCategoryVersion(
-                    versionId,
+            naverCategoryVersionRepository.deactivateActiveVersions();
+            NaverCategoryVersion version = naverCategoryVersionRepository.save(new NaverCategoryVersion(
                     filename,
                     categories.size(),
                     categories.size(),
-                    uploadedFilePath,
-                    csvFilePath,
-                    Instant.now()
-            );
-            naverCategoryRepository.replaceActive(version, categories);
+                    uploadedFilePath.toString(),
+                    csvFilePath.toString(),
+                    Instant.now(),
+                    true
+            ));
+
+            for (NaverCategory category : categories) {
+                category.assignVersionId(version.getId());
+            }
+            naverCategoryRepository.saveAll(categories);
+            writeCsv(csvFilePath, categories);
             return version;
         } catch (BusinessException e) {
             throw e;
@@ -110,7 +117,7 @@ public class NaverCategoryUploadService {
                 }
 
                 NaverCategory category = createCategory(categoryCode, level1, level2, level3, level4);
-                categoriesByCode.put(category.categoryCode(), category);
+                categoriesByCode.put(category.getCategoryCode(), category);
             }
 
             return new ArrayList<>(categoriesByCode.values());
@@ -148,7 +155,7 @@ public class NaverCategoryUploadService {
                 .toList();
         String fullPath = String.join(" > ", levels);
         String searchText = String.join(" ", levels);
-        return new NaverCategory(categoryCode, level1, level2, level3, level4, fullPath, searchText);
+        return new NaverCategory(null, categoryCode, level1, level2, level3, level4, fullPath, searchText);
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
@@ -164,13 +171,13 @@ public class NaverCategoryUploadService {
             writer.println("category_code,level1,level2,level3,level4,full_path,search_text");
             for (NaverCategory category : categories) {
                 writer.println(String.join(",",
-                        csv(category.categoryCode()),
-                        csv(category.level1()),
-                        csv(category.level2()),
-                        csv(category.level3()),
-                        csv(category.level4()),
-                        csv(category.fullPath()),
-                        csv(category.searchText())
+                        csv(category.getCategoryCode()),
+                        csv(category.getLevel1()),
+                        csv(category.getLevel2()),
+                        csv(category.getLevel3()),
+                        csv(category.getLevel4()),
+                        csv(category.getFullPath()),
+                        csv(category.getSearchText())
                 ));
             }
         }
