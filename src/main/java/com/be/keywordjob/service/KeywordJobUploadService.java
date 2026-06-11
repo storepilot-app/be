@@ -10,23 +10,18 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.be.keywordjob.domain.KeywordJob;
 import com.be.keywordjob.repository.KeywordJobRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@RequiredArgsConstructor
 public class KeywordJobUploadService {
     private final KeywordJobRepository keywordJobRepository;
     private final AtomicLong jobIdGenerator = new AtomicLong(1);
-    private final Path uploadRoot;
-
-    public KeywordJobUploadService(
-            KeywordJobRepository keywordJobRepository,
-            @Value("${storepilot.upload-dir:uploads}") String uploadDir
-    ) {
-        this.keywordJobRepository = keywordJobRepository;
-        this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
-    }
+    @Value("${storepilot.upload-dir:uploads}")
+    private String uploadDir;
 
     public KeywordJob upload(
             MultipartFile file,
@@ -38,7 +33,7 @@ public class KeywordJobUploadService {
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
-        Path jobDir = uploadRoot.resolve("keyword-jobs").resolve(String.valueOf(jobId));
+        Path jobDir = uploadRoot().resolve("keyword-jobs").resolve(String.valueOf(jobId));
         Path targetPath = jobDir.resolve(filename).normalize();
 
         try {
@@ -93,5 +88,9 @@ public class KeywordJobUploadService {
             return "input.xlsx";
         }
         return filename.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private Path uploadRoot() {
+        return Path.of(uploadDir).toAbsolutePath().normalize();
     }
 }
