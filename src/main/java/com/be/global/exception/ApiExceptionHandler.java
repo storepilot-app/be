@@ -13,6 +13,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<CommonResponse<Void>> handleBusinessException(BusinessException exception) {
         HttpStatus status = exception.getErrorCode() == ErrorCode.INVALID_EXCEL_FILE
+                || exception.getErrorCode() == ErrorCode.INVALID_NAVER_CATEGORY_FILE
                 ? HttpStatus.BAD_REQUEST
                 : HttpStatus.UNPROCESSABLE_ENTITY;
         return ResponseEntity.status(status)
