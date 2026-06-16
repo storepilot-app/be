@@ -3,6 +3,7 @@ package com.be.global.exception;
 public enum ErrorCode {
     INVALID_EXCEL_FILE,
     INVALID_NAVER_CATEGORY_FILE,
+    INVALID_MY_CATEGORY_MAPPING_FILE,
     COLUMN_NOT_FOUND,
     JOB_NOT_FOUND,
     JOB_NOT_COMPLETED,
