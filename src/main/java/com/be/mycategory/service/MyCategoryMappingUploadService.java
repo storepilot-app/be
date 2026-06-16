@@ -55,7 +55,7 @@ public class MyCategoryMappingUploadService {
                 .filter(mapping -> mapping.getNaverCategoryId() != null)
                 .count();
 
-        myCategoryMappingVersionRepository.deactivateActiveVersions(normalizedUserKey);
+        replaceExistingMappings(normalizedUserKey);
         MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(new MyCategoryMappingVersion(
                 normalizedUserKey,
                 filename,
@@ -71,6 +71,11 @@ public class MyCategoryMappingUploadService {
         }
         myCategoryMappingRepository.saveAll(mappings);
         return version;
+    }
+
+    private void replaceExistingMappings(String userKey) {
+        myCategoryMappingRepository.deleteByUserKey(userKey);
+        myCategoryMappingVersionRepository.deleteByUserKey(userKey);
     }
 
     private List<MyCategoryMapping> parseMappings(MultipartFile file, String userKey) {

@@ -11,4 +11,6 @@ public interface MyCategoryMappingRepository extends JpaRepository<MyCategoryMap
     Optional<MyCategoryMapping> findFirstByUserKeyAndVersionIdAndMyCategoryCode(String userKey, Long versionId, String myCategoryCode);
 
     long countByVersionId(Long versionId);
+
+    void deleteByUserKey(String userKey);
 }

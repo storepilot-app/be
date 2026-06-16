@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 public interface MyCategoryMappingVersionRepository extends JpaRepository<MyCategoryMappingVersion, Long> {
     Optional<MyCategoryMappingVersion> findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(String userKey);
 
+    void deleteByUserKey(String userKey);
+
     @Modifying
     @Query("update MyCategoryMappingVersion v set v.active = false where v.userKey = :userKey and v.active = true")
     void deactivateActiveVersions(@Param("userKey") String userKey);
