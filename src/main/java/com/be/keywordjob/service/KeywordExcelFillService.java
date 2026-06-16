@@ -1,6 +1,8 @@
 package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
+import com.be.categorymatcher.dto.MyCategoryMatchResult;
+import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
@@ -46,6 +48,8 @@ public class KeywordExcelFillService {
     private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
     private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
+    private static final String NO_CATEGORY_MATCH = "\uB9E4\uCE6D\uC5C6\uC74C";
+    private static final String NO_MY_CATEGORY_MAPPING = "\uB9C8\uC774\uCE74\uD14C \uC5C6\uC74C";
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
@@ -94,8 +98,7 @@ public class KeywordExcelFillService {
                     continue;
                 }
 
-                String myCategory = categoryMatcherService.findMyCategoryCode(productName, userKey)
-                        .orElseGet(() -> inferMyCategory(productName, category));
+                String myCategory = resolveMyCategory(productName, userKey);
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
@@ -328,6 +331,17 @@ public class KeywordExcelFillService {
         if (text.contains("\uD0A4\uBCF4\uB4DC")) return "\uD0A4\uBCF4\uB4DC";
         if (text.contains("\uC2A4\uD2F0\uCEE4") || text.contains("\uC52C")) return "\uC2A4\uD2F0\uCEE4";
         return "\uAE30\uD0C0";
+    }
+
+    private String resolveMyCategory(String productName, String userKey) {
+        MyCategoryMatchResult result = categoryMatcherService.findMyCategoryCode(productName, userKey);
+        if (result.status() == MyCategoryMatchStatus.MATCHED) {
+            return result.myCategoryCode();
+        }
+        if (result.status() == MyCategoryMatchStatus.NO_MY_CATEGORY_MAPPING) {
+            return NO_MY_CATEGORY_MAPPING;
+        }
+        return NO_CATEGORY_MATCH;
     }
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {
