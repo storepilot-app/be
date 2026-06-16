@@ -12,6 +12,6 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("Content-Disposition");
+                .exposedHeaders("Content-Disposition", "X-Saved-Image-Count", "X-Failed-Image-Count");
     }
 }
