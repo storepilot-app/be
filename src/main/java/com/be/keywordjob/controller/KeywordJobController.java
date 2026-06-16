@@ -104,13 +104,16 @@ public class KeywordJobController {
             @Parameter(description = "Naver category column. Leave empty when the excel has no category column.", example = "네이버 카테고리")
             @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
             @Parameter(description = "Keyword count per product. Default is 30.", example = "30")
-            @RequestParam(value = "keywordCount", required = false) Integer keywordCount
+            @RequestParam(value = "keywordCount", required = false) Integer keywordCount,
+            @Parameter(description = "User key for my category mapping.", example = "user-a")
+            @RequestParam(value = "userKey", required = false, defaultValue = "") String userKey
     ) {
         ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
                 file,
                 productNameColumn,
                 categoryColumn,
-                keywordCount
+                keywordCount,
+                userKey
         );
 
         return ResponseEntity.ok()

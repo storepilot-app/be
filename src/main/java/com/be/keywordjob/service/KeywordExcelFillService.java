@@ -1,5 +1,6 @@
 package com.be.keywordjob.service;
 
+import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
@@ -46,6 +47,7 @@ public class KeywordExcelFillService {
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
     private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
 
+    private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -59,7 +61,8 @@ public class KeywordExcelFillService {
             MultipartFile file,
             String productNameColumn,
             String categoryColumn,
-            Integer keywordCount
+            Integer keywordCount,
+            String userKey
     ) {
         keywordJobUploadService.validate(file, productNameColumn, keywordCount);
 
@@ -91,7 +94,8 @@ public class KeywordExcelFillService {
                     continue;
                 }
 
-                String myCategory = inferMyCategory(productName, category);
+                String myCategory = categoryMatcherService.findMyCategoryCode(productName, userKey)
+                        .orElseGet(() -> inferMyCategory(productName, category));
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
