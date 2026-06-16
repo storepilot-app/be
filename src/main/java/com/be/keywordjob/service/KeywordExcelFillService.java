@@ -42,9 +42,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
+    private static final int UNMAPPED_NAVER_CATEGORY_COLUMN_INDEX = 20; // U
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
+    private static final String UNMAPPED_NAVER_CATEGORY_HEADER = "\uB124\uC774\uBC84\uCE74\uD14C";
     private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
     private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
@@ -82,6 +84,7 @@ public class KeywordExcelFillService {
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
+            ensureHeader(headerRow, UNMAPPED_NAVER_CATEGORY_COLUMN_INDEX, UNMAPPED_NAVER_CATEGORY_HEADER);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
@@ -98,11 +101,13 @@ public class KeywordExcelFillService {
                     continue;
                 }
 
-                String myCategory = resolveMyCategory(productName, userKey);
+                MyCategoryMatchResult myCategoryResult = categoryMatcherService.findMyCategoryCode(productName, userKey);
+                String myCategory = resolveMyCategory(myCategoryResult);
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
+                writeUnmappedNaverCategory(row, myCategoryResult);
             }
 
             workbook.write(outputStream);
@@ -333,8 +338,7 @@ public class KeywordExcelFillService {
         return "\uAE30\uD0C0";
     }
 
-    private String resolveMyCategory(String productName, String userKey) {
-        MyCategoryMatchResult result = categoryMatcherService.findMyCategoryCode(productName, userKey);
+    private String resolveMyCategory(MyCategoryMatchResult result) {
         if (result.status() == MyCategoryMatchStatus.MATCHED) {
             return result.myCategoryCode();
         }
@@ -342,6 +346,14 @@ public class KeywordExcelFillService {
             return NO_MY_CATEGORY_MAPPING;
         }
         return NO_CATEGORY_MATCH;
+    }
+
+    private void writeUnmappedNaverCategory(Row row, MyCategoryMatchResult result) {
+        if (result.status() == MyCategoryMatchStatus.NO_MY_CATEGORY_MAPPING && result.naverCategory() != null) {
+            row.createCell(UNMAPPED_NAVER_CATEGORY_COLUMN_INDEX).setCellValue(result.naverCategory());
+            return;
+        }
+        row.createCell(UNMAPPED_NAVER_CATEGORY_COLUMN_INDEX).setCellValue("");
     }
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {

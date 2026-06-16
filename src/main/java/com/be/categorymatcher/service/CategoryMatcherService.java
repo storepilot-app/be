@@ -44,8 +44,8 @@ public class CategoryMatcherService {
         }
 
         return findMapping(userKey.trim(), category.get())
-                .map(mapping -> MyCategoryMatchResult.matched(mapping.getMyCategoryCode()))
-                .orElseGet(MyCategoryMatchResult::noMyCategoryMapping);
+                .map(mapping -> MyCategoryMatchResult.matched(mapping.getMyCategoryCode(), category.get().getFullPath()))
+                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(category.get().getFullPath()));
     }
 
     public void rebuildEmbeddings(Long versionId) {
