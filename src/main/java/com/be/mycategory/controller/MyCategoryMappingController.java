@@ -46,7 +46,6 @@ public class MyCategoryMappingController {
                                                 "rowCount": 120,
                                                 "mappingCount": 120,
                                                 "matchedCount": 118,
-                                                "uploadedFilePath": "C:/Project/StorePilot/be/uploads/my-category-mappings/user-a/versions/...",
                                                 "message": "My category mappings uploaded."
                                               },
                                               "message": "My category mappings uploaded.",
@@ -73,7 +72,6 @@ public class MyCategoryMappingController {
                 version.getRowCount(),
                 version.getMappingCount(),
                 version.getMatchedCount(),
-                version.getUploadedFilePath(),
                 "My category mappings uploaded."
         );
         return CommonResponse.success(response, response.message());

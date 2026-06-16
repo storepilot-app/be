@@ -16,8 +16,6 @@ public record MyCategoryMappingUploadResponse(
         int mappingCount,
         @Schema(description = "Rows matched to active Naver category data", example = "118")
         int matchedCount,
-        @Schema(description = "Uploaded file path")
-        String uploadedFilePath,
         @Schema(description = "Response message", example = "My category mappings uploaded.")
         String message
 ) {

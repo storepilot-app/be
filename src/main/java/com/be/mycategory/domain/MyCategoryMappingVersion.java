@@ -22,6 +22,8 @@ import lombok.NoArgsConstructor;
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MyCategoryMappingVersion {
+    private static final String ORIGINAL_FILE_NOT_STORED = "NOT_STORED";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -56,7 +58,6 @@ public class MyCategoryMappingVersion {
             int rowCount,
             int mappingCount,
             int matchedCount,
-            String uploadedFilePath,
             Instant uploadedAt,
             boolean active
     ) {
@@ -65,7 +66,7 @@ public class MyCategoryMappingVersion {
         this.rowCount = rowCount;
         this.mappingCount = mappingCount;
         this.matchedCount = matchedCount;
-        this.uploadedFilePath = uploadedFilePath;
+        this.uploadedFilePath = ORIGINAL_FILE_NOT_STORED;
         this.uploadedAt = uploadedAt;
         this.active = active;
     }

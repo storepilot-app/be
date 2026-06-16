@@ -11,8 +11,6 @@ import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
 import com.be.navercategory.repository.NaverCategoryVersionRepository;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,7 +25,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,62 +40,41 @@ public class MyCategoryMappingUploadService {
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
 
-    @Value("${storepilot.upload-dir:uploads}")
-    private String uploadDir;
-
     @Transactional
     public MyCategoryMappingVersion upload(MultipartFile file, String userKey) {
         validateFile(file);
         String normalizedUserKey = normalizeUserKey(userKey);
-
         String filename = safeFilename(file.getOriginalFilename());
-        String uploadKey = String.valueOf(System.currentTimeMillis());
-        Path versionDir = uploadRoot()
-                .resolve("my-category-mappings")
-                .resolve(normalizedUserKey)
-                .resolve("versions")
-                .resolve(uploadKey);
-        Path uploadedFilePath = versionDir.resolve(filename).normalize();
 
-        try {
-            Files.createDirectories(versionDir);
-            file.transferTo(uploadedFilePath);
-
-            List<MyCategoryMapping> mappings = parseMappings(uploadedFilePath, normalizedUserKey);
-            if (mappings.isEmpty()) {
-                throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "My category mapping file has no mapping rows.");
-            }
-
-            int matchedCount = (int) mappings.stream()
-                    .filter(mapping -> mapping.getNaverCategoryId() != null)
-                    .count();
-
-            myCategoryMappingVersionRepository.deactivateActiveVersions(normalizedUserKey);
-            MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(new MyCategoryMappingVersion(
-                    normalizedUserKey,
-                    filename,
-                    mappings.size(),
-                    mappings.size(),
-                    matchedCount,
-                    uploadedFilePath.toString(),
-                    Instant.now(),
-                    true
-            ));
-
-            for (MyCategoryMapping mapping : mappings) {
-                mapping.assignVersionId(version.getId());
-            }
-            myCategoryMappingRepository.saveAll(mappings);
-            return version;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "Failed to upload my category mapping file.");
+        List<MyCategoryMapping> mappings = parseMappings(file, normalizedUserKey);
+        if (mappings.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "My category mapping file has no mapping rows.");
         }
+
+        int matchedCount = (int) mappings.stream()
+                .filter(mapping -> mapping.getNaverCategoryId() != null)
+                .count();
+
+        myCategoryMappingVersionRepository.deactivateActiveVersions(normalizedUserKey);
+        MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(new MyCategoryMappingVersion(
+                normalizedUserKey,
+                filename,
+                mappings.size(),
+                mappings.size(),
+                matchedCount,
+                Instant.now(),
+                true
+        ));
+
+        for (MyCategoryMapping mapping : mappings) {
+            mapping.assignVersionId(version.getId());
+        }
+        myCategoryMappingRepository.saveAll(mappings);
+        return version;
     }
 
-    private List<MyCategoryMapping> parseMappings(Path filePath, String userKey) {
-        try (Workbook workbook = WorkbookFactory.create(filePath.toFile())) {
+    private List<MyCategoryMapping> parseMappings(MultipartFile file, String userKey) {
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
@@ -183,9 +159,5 @@ public class MyCategoryMappingUploadService {
             return "my_category_mappings.xlsx";
         }
         return filename.replaceAll("[\\\\/:*?\"<>|]", "_");
-    }
-
-    private Path uploadRoot() {
-        return Path.of(uploadDir).toAbsolutePath().normalize();
     }
 }
