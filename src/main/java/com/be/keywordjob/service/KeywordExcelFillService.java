@@ -5,8 +5,15 @@ import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,6 +26,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,14 +36,25 @@ public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
     private static final int DEFAULT_KEYWORD_COUNT = 30;
+    private static final String IMAGE_URL_COLUMN = "목록이미지1";
+    private static final String PRODUCT_CODE_COLUMN = "상품코드";
+    private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
 
     private final KeywordJobUploadService keywordJobUploadService;
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+
+    @Value("${storepilot.upload-dir:uploads}")
+    private String uploadDir;
 
     public ExcelDownloadResult fillAndDownload(
             MultipartFile file,
             String productNameColumn,
             String categoryColumn,
-            Integer keywordCount
+            Integer keywordCount,
+            String imageOutputDir
     ) {
         keywordJobUploadService.validate(file, productNameColumn, keywordCount);
 
@@ -49,10 +68,15 @@ public class KeywordExcelFillService {
 
             int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
+            int imageUrlColumnIndex = findOptionalColumnIndex(headerRow, IMAGE_URL_COLUMN);
+            int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
+            int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, "키워드");
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, "마이카테");
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
+            Path imageDirectory = resolveImageDirectory(imageOutputDir);
+            Files.createDirectories(imageDirectory);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
@@ -69,6 +93,15 @@ public class KeywordExcelFillService {
 
                 String myCategory = inferMyCategory(productName, category);
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
+                downloadImageIfPresent(
+                        row,
+                        formatter,
+                        imageUrlColumnIndex,
+                        productCodeColumnIndex,
+                        productNumberColumnIndex,
+                        imageDirectory,
+                        rowIndex + 1
+                );
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
@@ -81,6 +114,44 @@ public class KeywordExcelFillService {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
+        }
+    }
+
+    private void downloadImageIfPresent(
+            Row row,
+            DataFormatter formatter,
+            int imageUrlColumnIndex,
+            int productCodeColumnIndex,
+            int productNumberColumnIndex,
+            Path imageDirectory,
+            int excelRowNumber
+    ) {
+        if (imageUrlColumnIndex < 0) {
+            return;
+        }
+
+        String imageUrl = readCell(row, imageUrlColumnIndex, formatter);
+        if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+            return;
+        }
+
+        String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
+        String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
+        String filenameBase = !productCode.isBlank() ? productCode : (!productNumber.isBlank() ? productNumber : "row_" + excelRowNumber);
+        Path targetPath = imageDirectory.resolve(safeFilename(filenameBase) + imageExtension(imageUrl));
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(imageUrl))
+                    .GET()
+                    .timeout(Duration.ofSeconds(20))
+                    .header("User-Agent", "StorePilot/1.0")
+                    .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                Files.write(targetPath, response.body());
+            }
+        } catch (Exception ignored) {
+            // Image download failure should not block the excel result.
         }
     }
 
@@ -196,6 +267,32 @@ public class KeywordExcelFillService {
         if (cleaned.length() >= 2 && cleaned.length() <= 20) {
             keywords.add(cleaned);
         }
+    }
+
+    private Path resolveImageDirectory(String imageOutputDir) {
+        if (imageOutputDir != null && !imageOutputDir.isBlank()) {
+            return Path.of(imageOutputDir).toAbsolutePath().normalize();
+        }
+        return Path.of(uploadDir).toAbsolutePath().normalize().resolve("product-images");
+    }
+
+    private String imageExtension(String imageUrl) {
+        String path = URI.create(imageUrl).getPath();
+        int dotIndex = path.lastIndexOf('.');
+        if (dotIndex >= 0) {
+            String extension = path.substring(dotIndex).toLowerCase(Locale.ROOT);
+            if (extension.matches("\\.(jpg|jpeg|png|webp|gif)")) {
+                return extension;
+            }
+        }
+        return ".jpg";
+    }
+
+    private String safeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "image";
+        }
+        return filename.replaceAll("[\\\\/:*?\"<>|\\s]+", "_");
     }
 
     private String buildDownloadFilename(String originalFilename) {

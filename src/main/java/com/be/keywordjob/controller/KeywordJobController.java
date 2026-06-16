@@ -26,7 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/keyword-jobs")
-@Tag(name = "Keyword Jobs", description = "엑셀 기반 키워드 생성 작업 API")
+@Tag(name = "Keyword Jobs", description = "Excel keyword job API")
 @RequiredArgsConstructor
 public class KeywordJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -35,12 +35,12 @@ public class KeywordJobController {
     private final KeywordExcelFillService keywordExcelFillService;
 
     @Operation(
-            summary = "엑셀 업로드",
-            description = "상품 엑셀 파일을 업로드하고 키워드 생성 작업을 PENDING 상태로 등록합니다.",
+            summary = "Upload product excel",
+            description = "Uploads a product excel file and registers a keyword job in PENDING state.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "작업 등록 성공",
+                            description = "Job registered",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                     schema = @Schema(implementation = CommonResponse.class),
@@ -50,9 +50,9 @@ public class KeywordJobController {
                                               "data": {
                                                 "jobId": 1,
                                                 "status": "PENDING",
-                                                "message": "키워드 생성 작업이 등록되었습니다."
+                                                "message": "Keyword job registered."
                                               },
-                                              "message": "키워드 생성 작업이 등록되었습니다.",
+                                              "message": "Keyword job registered.",
                                               "code": null,
                                               "errors": null
                                             }
@@ -63,51 +63,54 @@ public class KeywordJobController {
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<KeywordJobUploadResponse> upload(
-            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
+            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
+            @Parameter(description = "Product name column", example = "상품명", required = true)
             @RequestParam("productNameColumn") String productNameColumn,
-            @Parameter(description = "네이버 카테고리 컬럼명. 엑셀에 없으면 비워둘 수 있습니다.", example = "네이버 카테고리")
+            @Parameter(description = "Naver category column. Leave empty when the excel has no category column.", example = "네이버 카테고리")
             @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
-            @Parameter(description = "상품당 생성 키워드 수. 기본값 30", example = "30")
+            @Parameter(description = "Keyword count per product. Default is 30.", example = "30")
             @RequestParam(value = "keywordCount", required = false) Integer keywordCount
     ) {
         KeywordJob job = keywordJobUploadService.upload(file, productNameColumn, categoryColumn, keywordCount);
         KeywordJobUploadResponse response = new KeywordJobUploadResponse(
                 job.getJobId(),
                 job.getStatus(),
-                "키워드 생성 작업이 등록되었습니다."
+                "Keyword job registered."
         );
         return CommonResponse.success(response, response.message());
     }
 
     @Operation(
-            summary = "엑셀 채우기 후 다운로드",
-            description = "엑셀 파일을 업로드하면 L열에 키워드, T열에 마이카테를 채운 결과 파일을 바로 반환합니다.",
+            summary = "Fill excel and download",
+            description = "Fills keywords in column L, my category in column T, downloads images from 목록이미지1, and returns the result excel file.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "결과 엑셀 다운로드",
+                            description = "Result excel download",
                             content = @Content(mediaType = EXCEL_CONTENT_TYPE)
                     )
             }
     )
     @PostMapping(value = "/upload-download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ByteArrayResource> uploadAndDownload(
-            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
+            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
+            @Parameter(description = "Product name column", example = "상품명", required = true)
             @RequestParam("productNameColumn") String productNameColumn,
-            @Parameter(description = "네이버 카테고리 컬럼명. 엑셀에 없으면 비워둘 수 있습니다.", example = "네이버 카테고리")
+            @Parameter(description = "Naver category column. Leave empty when the excel has no category column.", example = "네이버 카테고리")
             @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
-            @Parameter(description = "상품당 생성 키워드 수. 기본값 30", example = "30")
-            @RequestParam(value = "keywordCount", required = false) Integer keywordCount
+            @Parameter(description = "Keyword count per product. Default is 30.", example = "30")
+            @RequestParam(value = "keywordCount", required = false) Integer keywordCount,
+            @Parameter(description = "Image output directory. Leave empty to use uploads/product-images.", example = "C:\\StorePilot\\images")
+            @RequestParam(value = "imageOutputDir", required = false, defaultValue = "") String imageOutputDir
     ) {
         ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
                 file,
                 productNameColumn,
                 categoryColumn,
-                keywordCount
+                keywordCount,
+                imageOutputDir
         );
 
         return ResponseEntity.ok()
