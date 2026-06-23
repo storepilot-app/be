@@ -1,6 +1,7 @@
 package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
+import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
@@ -43,10 +44,13 @@ public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
+    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 26; // AA
+    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
     private static final String NAVER_CATEGORY_HEADER = "\uB124\uC774\uBC84\uCE74\uD14C";
+    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
     private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
     private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
@@ -85,6 +89,7 @@ public class KeywordExcelFillService {
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
+            ensureTopNaverCategoryHeaders(headerRow);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
@@ -108,6 +113,7 @@ public class KeywordExcelFillService {
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
+                writeTopNaverCategories(row, myCategoryResult);
             }
 
             workbook.write(outputStream);
@@ -311,6 +317,16 @@ public class KeywordExcelFillService {
         cell.setCellValue(value);
     }
 
+    private void ensureTopNaverCategoryHeaders(Row headerRow) {
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            ensureHeader(
+                    headerRow,
+                    TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index,
+                    TOP_NAVER_CATEGORIES_HEADER_PREFIX + (index + 1)
+            );
+        }
+    }
+
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
         Cell cell = row.getCell(columnIndex);
         if (cell == null) {
@@ -353,6 +369,26 @@ public class KeywordExcelFillService {
                 ? NO_CATEGORY_MATCH
                 : result.naverCategory();
         row.createCell(NAVER_CATEGORY_COLUMN_INDEX).setCellValue(naverCategory);
+    }
+
+    private void writeTopNaverCategories(Row row, MyCategoryMatchResult result) {
+        List<CategoryMatchCandidate> candidates = result.topNaverCategoryCandidates();
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            Cell cell = row.createCell(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index);
+            if (candidates.isEmpty() && index == 0) {
+                cell.setCellValue(NO_CATEGORY_MATCH);
+                continue;
+            }
+            if (index >= candidates.size()) {
+                cell.setCellValue("");
+                continue;
+            }
+            cell.setCellValue(formatTopNaverCategory(candidates.get(index)));
+        }
+    }
+
+    private String formatTopNaverCategory(CategoryMatchCandidate candidate) {
+        return String.format(Locale.ROOT, "%s (%.4f)", candidate.fullPath(), candidate.score());
     }
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {

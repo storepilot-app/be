@@ -1,6 +1,7 @@
 package com.be.categorymatcher.service;
 
 import com.be.categorymatcher.client.CategoryMatcherAiClient;
+import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchPrediction;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
@@ -36,16 +37,19 @@ public class CategoryMatcherService {
         }
 
         List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
-        Optional<NaverCategory> category = findByRule(productName, categories)
+        Optional<CategoryMatchContext> matchContext = findByRule(productName, categories)
                 .or(() -> findByAi(activeVersion.get().getId(), productName, categories));
 
-        if (category.isEmpty()) {
+        if (matchContext.isEmpty()) {
             return MyCategoryMatchResult.noCategoryMatch();
         }
 
-        return findMapping(userKey.trim(), category.get())
-                .map(mapping -> MyCategoryMatchResult.matched(mapping.getMyCategoryCode(), category.get().getFullPath()))
-                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(category.get().getFullPath()));
+        NaverCategory category = matchContext.get().category();
+        List<CategoryMatchCandidate> topNaverCategoryCandidates = matchContext.get().topNaverCategoryCandidates();
+
+        return findMapping(userKey.trim(), category)
+                .map(mapping -> MyCategoryMatchResult.matched(mapping.getMyCategoryCode(), category.getFullPath(), topNaverCategoryCandidates))
+                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(category.getFullPath(), topNaverCategoryCandidates));
     }
 
     public void rebuildEmbeddings(Long versionId) {
@@ -61,12 +65,20 @@ public class CategoryMatcherService {
         return activeVersion.map(NaverCategoryVersion::getId);
     }
 
-    private Optional<NaverCategory> findByRule(String productName, List<NaverCategory> categories) {
+    private Optional<CategoryMatchContext> findByRule(String productName, List<NaverCategory> categories) {
         String normalizedProductName = normalize(preprocessProductName(productName));
-        return categories.stream()
+        List<NaverCategory> candidates = categories.stream()
                 .filter(category -> !bestRuleKeyword(category).isBlank())
                 .filter(category -> normalizedProductName.contains(normalize(bestRuleKeyword(category))))
-                .max(Comparator.comparingInt(category -> normalize(bestRuleKeyword(category)).length()));
+                .sorted(Comparator.comparingInt((NaverCategory category) -> normalize(bestRuleKeyword(category)).length()).reversed())
+                .limit(5)
+                .toList();
+
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates)));
     }
 
     private String bestRuleKeyword(NaverCategory category) {
@@ -82,9 +94,9 @@ public class CategoryMatcherService {
         return category.getLevel1();
     }
 
-    private Optional<NaverCategory> findByAi(Long versionId, String productName, List<NaverCategory> categories) {
+    private Optional<CategoryMatchContext> findByAi(Long versionId, String productName, List<NaverCategory> categories) {
         List<CategoryMatchProductRequest> products = List.of(new CategoryMatchProductRequest(1, productName));
-        Optional<NaverCategory> firstResult = predictByAi(versionId, products, categories);
+        Optional<CategoryMatchContext> firstResult = predictByAi(versionId, products, categories);
         if (firstResult.isPresent()) {
             return firstResult;
         }
@@ -93,14 +105,45 @@ public class CategoryMatcherService {
         return predictByAi(versionId, products, categories);
     }
 
-    private Optional<NaverCategory> predictByAi(
+    private Optional<CategoryMatchContext> predictByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products,
             List<NaverCategory> categories
     ) {
         return categoryMatcherAiClient.predict(versionId, products)
                 .flatMap(response -> response.results().stream().findFirst())
-                .flatMap(prediction -> findCategoryFromPrediction(categories, prediction));
+                .flatMap(prediction -> findCategoryFromPrediction(categories, prediction)
+                        .map(category -> new CategoryMatchContext(category, topCandidates(prediction))));
+    }
+
+    private List<CategoryMatchCandidate> topCandidates(CategoryMatchPrediction prediction) {
+        if (prediction.candidates() == null || prediction.candidates().isEmpty()) {
+            return prediction.fullPath() == null || prediction.fullPath().isBlank()
+                    ? List.of()
+                    : List.of(new CategoryMatchCandidate(
+                            prediction.categoryId(),
+                            prediction.categoryCode(),
+                            prediction.fullPath(),
+                            prediction.score()
+                    ));
+        }
+        return prediction.candidates().stream()
+                .filter(candidate -> candidate.fullPath() != null && !candidate.fullPath().isBlank())
+                .limit(5)
+                .toList();
+    }
+
+    private List<CategoryMatchCandidate> toCandidates(List<NaverCategory> categories) {
+        return categories.stream()
+                .filter(category -> category.getFullPath() != null && !category.getFullPath().isBlank())
+                .map(category -> new CategoryMatchCandidate(
+                        category.getId(),
+                        category.getCategoryCode(),
+                        category.getFullPath(),
+                        1.0
+                ))
+                .limit(5)
+                .toList();
     }
 
     private Optional<NaverCategory> findCategoryFromPrediction(List<NaverCategory> categories, CategoryMatchPrediction prediction) {
@@ -128,5 +171,8 @@ public class CategoryMatcherService {
             return "";
         }
         return value.toLowerCase(Locale.ROOT).replaceAll("[\\s_/(),\\[\\]>-]+", "");
+    }
+
+    private record CategoryMatchContext(NaverCategory category, List<CategoryMatchCandidate> topNaverCategoryCandidates) {
     }
 }
