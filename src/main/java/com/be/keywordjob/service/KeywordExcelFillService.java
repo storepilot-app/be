@@ -44,12 +44,14 @@ public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
-    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 26; // AA
+    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
+    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
     private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
     private static final String NAVER_CATEGORY_HEADER = "\uB124\uC774\uBC84\uCE74\uD14C";
+    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "\uC0C1\uD488\uBA85";
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
     private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
@@ -113,6 +115,7 @@ public class KeywordExcelFillService {
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
+                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
                 writeTopNaverCategories(row, myCategoryResult);
             }
 
@@ -318,6 +321,7 @@ public class KeywordExcelFillService {
     }
 
     private void ensureTopNaverCategoryHeaders(Row headerRow) {
+        ensureHeader(headerRow, TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_HEADER);
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
             ensureHeader(
                     headerRow,
