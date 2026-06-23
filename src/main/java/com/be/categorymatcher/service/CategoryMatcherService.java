@@ -37,8 +37,10 @@ public class CategoryMatcherService {
         }
 
         List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
-        Optional<CategoryMatchContext> matchContext = findByRule(productName, categories)
-                .or(() -> findByAi(activeVersion.get().getId(), productName, categories));
+        // Rule-based matching is temporarily disabled to inspect AI category scores.
+        Optional<CategoryMatchContext> matchContext = findByAi(activeVersion.get().getId(), productName, categories);
+//        Optional<CategoryMatchContext> matchContext = findByRule(productName, categories)
+//                .or(() -> findByAi(activeVersion.get().getId(), productName, categories));
 
         if (matchContext.isEmpty()) {
             return MyCategoryMatchResult.noCategoryMatch();
