@@ -86,7 +86,7 @@ public class KeywordJobController {
 
     @Operation(
             summary = "Fill excel and download",
-            description = "Fills keywords in column L and my category in column T, then returns the result excel file.",
+            description = "Fills keywords in column L, my category in column T, and Naver category in column U, then returns the result excel file.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",

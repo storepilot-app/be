@@ -10,10 +10,10 @@ import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
 import com.be.navercategory.repository.NaverCategoryVersionRepository;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -62,7 +62,7 @@ public class CategoryMatcherService {
     }
 
     private Optional<NaverCategory> findByRule(String productName, List<NaverCategory> categories) {
-        String normalizedProductName = normalize(productName);
+        String normalizedProductName = normalize(preprocessProductName(productName));
         return categories.stream()
                 .filter(category -> !bestRuleKeyword(category).isBlank())
                 .filter(category -> normalizedProductName.contains(normalize(bestRuleKeyword(category))))
@@ -109,6 +109,13 @@ public class CategoryMatcherService {
                         || prediction.categoryCode() != null && prediction.categoryCode().equals(category.getCategoryCode())
                         || prediction.fullPath() != null && prediction.fullPath().equals(category.getFullPath()))
                 .findFirst();
+    }
+
+    private String preprocessProductName(String productName) {
+        return productName
+                .replaceAll("\\([^)]*\\)|（[^）]*）", " ")
+                .replaceAll("\\d+", " ")
+                .replaceAll("[()（）]", " ");
     }
 
     private Optional<MyCategoryMapping> findMapping(String userKey, NaverCategory naverCategory) {
