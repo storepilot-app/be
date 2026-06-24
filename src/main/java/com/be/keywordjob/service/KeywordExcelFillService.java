@@ -31,7 +31,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -97,6 +100,7 @@ public class KeywordExcelFillService {
             if (headerRow == null) {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
+            LlmStatusCellStyles llmStatusCellStyles = createLlmStatusCellStyles(workbook);
 
             int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
@@ -147,7 +151,7 @@ public class KeywordExcelFillService {
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
                 writeTopNaverCategories(row, myCategoryResult);
                 writeLlmSelectedCategory(row, myCategoryResult);
-                writeLlmStatus(row, myCategoryResult);
+                writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
             }
 
             workbook.write(outputStream);
@@ -443,8 +447,14 @@ public class KeywordExcelFillService {
         row.createCell(LLM_SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
     }
 
-    private void writeLlmStatus(Row row, MyCategoryMatchResult result) {
-        row.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
+    private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
+        Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
+        cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
+        if ("SELECTED".equals(result.llmStatus())) {
+            cell.setCellStyle(styles.selected());
+        } else if ("REJECTED".equals(result.llmStatus())) {
+            cell.setCellStyle(styles.rejected());
+        }
     }
 
     private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
@@ -472,6 +482,21 @@ public class KeywordExcelFillService {
             return value;
         }
         return value.substring(0, maxLength - 3) + "...";
+    }
+
+    private LlmStatusCellStyles createLlmStatusCellStyles(Workbook workbook) {
+        CellStyle selected = workbook.createCellStyle();
+        selected.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+        selected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle rejected = workbook.createCellStyle();
+        rejected.setFillForegroundColor(IndexedColors.ROSE.getIndex());
+        rejected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        return new LlmStatusCellStyles(selected, rejected);
+    }
+
+    private record LlmStatusCellStyles(CellStyle selected, CellStyle rejected) {
     }
 
     private String formatTopNaverCategory(CategoryMatchCandidate candidate) {
