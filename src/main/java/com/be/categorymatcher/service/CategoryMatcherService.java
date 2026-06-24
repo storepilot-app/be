@@ -48,10 +48,24 @@ public class CategoryMatcherService {
 
         NaverCategory category = matchContext.get().category();
         List<CategoryMatchCandidate> topNaverCategoryCandidates = matchContext.get().topNaverCategoryCandidates();
+        String llmSelectedCategory = matchContext.get().llmSelectedCategory();
+
+        if (category == null) {
+            return MyCategoryMatchResult.noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory);
+        }
 
         return findMapping(userKey.trim(), category)
-                .map(mapping -> MyCategoryMatchResult.matched(mapping.getMyCategoryCode(), category.getFullPath(), topNaverCategoryCandidates))
-                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(category.getFullPath(), topNaverCategoryCandidates));
+                .map(mapping -> MyCategoryMatchResult.matched(
+                        mapping.getMyCategoryCode(),
+                        category.getFullPath(),
+                        topNaverCategoryCandidates,
+                        llmSelectedCategory
+                ))
+                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(
+                        category.getFullPath(),
+                        topNaverCategoryCandidates,
+                        llmSelectedCategory
+                ));
     }
 
     public void rebuildEmbeddings(Long versionId) {
@@ -80,7 +94,7 @@ public class CategoryMatcherService {
             return Optional.empty();
         }
 
-        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates)));
+        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates), null));
     }
 
     private String bestRuleKeyword(NaverCategory category) {
@@ -114,8 +128,11 @@ public class CategoryMatcherService {
     ) {
         return categoryMatcherAiClient.predict(versionId, products)
                 .flatMap(response -> response.results().stream().findFirst())
-                .flatMap(prediction -> findCategoryFromPrediction(categories, prediction)
-                        .map(category -> new CategoryMatchContext(category, topCandidates(prediction))));
+                .map(prediction -> new CategoryMatchContext(
+                        findCategoryFromPrediction(categories, prediction).orElse(null),
+                        topCandidates(prediction),
+                        Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null
+                ));
     }
 
     private List<CategoryMatchCandidate> topCandidates(CategoryMatchPrediction prediction) {
@@ -175,6 +192,10 @@ public class CategoryMatcherService {
         return value.toLowerCase(Locale.ROOT).replaceAll("[\\s_/(),\\[\\]>-]+", "");
     }
 
-    private record CategoryMatchContext(NaverCategory category, List<CategoryMatchCandidate> topNaverCategoryCandidates) {
+    private record CategoryMatchContext(
+            NaverCategory category,
+            List<CategoryMatchCandidate> topNaverCategoryCandidates,
+            String llmSelectedCategory
+    ) {
     }
 }

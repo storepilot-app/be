@@ -8,6 +8,8 @@ public record CategoryMatchPrediction(
         String categoryCode,
         String fullPath,
         double score,
-        List<CategoryMatchCandidate> candidates
+        List<CategoryMatchCandidate> candidates,
+        Boolean llmUsed,
+        String llmSelectedCategory
 ) {
 }
