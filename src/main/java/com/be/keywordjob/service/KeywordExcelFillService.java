@@ -52,7 +52,8 @@ public class KeywordExcelFillService {
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int LLM_SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int LLM_STATUS_COLUMN_WIDTH = 15 * 256;
+    private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
+    private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
@@ -422,20 +423,34 @@ public class KeywordExcelFillService {
     }
 
     private void writeLlmStatus(Row row, MyCategoryMatchResult result) {
-        row.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(formatLlmStatus(result.llmStatus()));
+        row.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
     }
 
-    private String formatLlmStatus(String llmStatus) {
+    private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
+        String status;
         if (llmStatus == null || llmStatus.isBlank()) {
-            return "\uD638\uCD9C\uC548\uD568";
+            status = "\uD638\uCD9C\uC548\uD568";
+        } else {
+            status = switch (llmStatus) {
+                case "SELECTED" -> "\uC120\uD0DD\uB428";
+                case "REJECTED" -> "\uAC70\uC808\uB428";
+                case "FAILED" -> "\uD638\uCD9C\uC2E4\uD328";
+                case "SKIPPED" -> "\uD638\uCD9C\uC548\uD568";
+                default -> llmStatus;
+            };
         }
-        return switch (llmStatus) {
-            case "SELECTED" -> "\uC120\uD0DD\uB428";
-            case "REJECTED" -> "\uAC70\uC808\uB428";
-            case "FAILED" -> "\uD638\uCD9C\uC2E4\uD328";
-            case "SKIPPED" -> "\uD638\uCD9C\uC548\uD568";
-            default -> llmStatus;
-        };
+
+        if (llmStatusDetail == null || llmStatusDetail.isBlank()) {
+            return status;
+        }
+        return status + ": " + abbreviate(llmStatusDetail, LLM_STATUS_DETAIL_MAX_LENGTH);
+    }
+
+    private String abbreviate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3) + "...";
     }
 
     private String formatTopNaverCategory(CategoryMatchCandidate candidate) {
