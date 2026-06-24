@@ -10,6 +10,7 @@ public record CategoryMatchPrediction(
         double score,
         List<CategoryMatchCandidate> candidates,
         Boolean llmUsed,
-        String llmSelectedCategory
+        String llmSelectedCategory,
+        String llmStatus
 ) {
 }

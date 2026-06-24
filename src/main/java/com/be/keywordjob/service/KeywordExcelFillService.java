@@ -48,9 +48,11 @@ public class KeywordExcelFillService {
     private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
     private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
     private static final int LLM_SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
+    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int LLM_SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
+    private static final int LLM_STATUS_COLUMN_WIDTH = 15 * 256;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
@@ -58,6 +60,7 @@ public class KeywordExcelFillService {
     private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "\uC0C1\uD488\uBA85";
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
     private static final String LLM_SELECTED_CATEGORY_HEADER = "LLM\uC120\uD0DD\uCE74\uD14C\uACE0\uB9AC";
+    private static final String LLM_STATUS_HEADER = "LLM\uC0C1\uD0DC";
     private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
     private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
     private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
@@ -125,6 +128,7 @@ public class KeywordExcelFillService {
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
                 writeTopNaverCategories(row, myCategoryResult);
                 writeLlmSelectedCategory(row, myCategoryResult);
+                writeLlmStatus(row, myCategoryResult);
             }
 
             workbook.write(outputStream);
@@ -338,6 +342,7 @@ public class KeywordExcelFillService {
             );
         }
         ensureHeader(headerRow, LLM_SELECTED_CATEGORY_COLUMN_INDEX, LLM_SELECTED_CATEGORY_HEADER);
+        ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
     }
 
     private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
@@ -346,6 +351,7 @@ public class KeywordExcelFillService {
             sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
         sheet.setColumnWidth(LLM_SELECTED_CATEGORY_COLUMN_INDEX, LLM_SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
@@ -413,6 +419,23 @@ public class KeywordExcelFillService {
                 ? NO_LLM_SELECTED_CATEGORY
                 : result.llmSelectedCategory();
         row.createCell(LLM_SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
+    }
+
+    private void writeLlmStatus(Row row, MyCategoryMatchResult result) {
+        row.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(formatLlmStatus(result.llmStatus()));
+    }
+
+    private String formatLlmStatus(String llmStatus) {
+        if (llmStatus == null || llmStatus.isBlank()) {
+            return "\uD638\uCD9C\uC548\uD568";
+        }
+        return switch (llmStatus) {
+            case "SELECTED" -> "\uC120\uD0DD\uB428";
+            case "REJECTED" -> "\uAC70\uC808\uB428";
+            case "FAILED" -> "\uD638\uCD9C\uC2E4\uD328";
+            case "SKIPPED" -> "\uD638\uCD9C\uC548\uD568";
+            default -> llmStatus;
+        };
     }
 
     private String formatTopNaverCategory(CategoryMatchCandidate candidate) {

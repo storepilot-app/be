@@ -49,9 +49,10 @@ public class CategoryMatcherService {
         NaverCategory category = matchContext.get().category();
         List<CategoryMatchCandidate> topNaverCategoryCandidates = matchContext.get().topNaverCategoryCandidates();
         String llmSelectedCategory = matchContext.get().llmSelectedCategory();
+        String llmStatus = matchContext.get().llmStatus();
 
         if (category == null) {
-            return MyCategoryMatchResult.noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory);
+            return MyCategoryMatchResult.noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus);
         }
 
         return findMapping(userKey.trim(), category)
@@ -59,12 +60,14 @@ public class CategoryMatcherService {
                         mapping.getMyCategoryCode(),
                         category.getFullPath(),
                         topNaverCategoryCandidates,
-                        llmSelectedCategory
+                        llmSelectedCategory,
+                        llmStatus
                 ))
                 .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(
                         category.getFullPath(),
                         topNaverCategoryCandidates,
-                        llmSelectedCategory
+                        llmSelectedCategory,
+                        llmStatus
                 ));
     }
 
@@ -94,7 +97,7 @@ public class CategoryMatcherService {
             return Optional.empty();
         }
 
-        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates), null));
+        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates), null, "SKIPPED"));
     }
 
     private String bestRuleKeyword(NaverCategory category) {
@@ -131,7 +134,8 @@ public class CategoryMatcherService {
                 .map(prediction -> new CategoryMatchContext(
                         findCategoryFromPrediction(categories, prediction).orElse(null),
                         topCandidates(prediction),
-                        Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null
+                        Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null,
+                        prediction.llmStatus()
                 ));
     }
 
@@ -195,7 +199,8 @@ public class CategoryMatcherService {
     private record CategoryMatchContext(
             NaverCategory category,
             List<CategoryMatchCandidate> topNaverCategoryCandidates,
-            String llmSelectedCategory
+            String llmSelectedCategory,
+            String llmStatus
     ) {
     }
 }

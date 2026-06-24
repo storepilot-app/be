@@ -7,7 +7,8 @@ public record MyCategoryMatchResult(
         String myCategoryCode,
         String naverCategory,
         List<CategoryMatchCandidate> topNaverCategoryCandidates,
-        String llmSelectedCategory
+        String llmSelectedCategory,
+        String llmStatus
 ) {
     public MyCategoryMatchResult {
         topNaverCategoryCandidates = topNaverCategoryCandidates == null ? List.of() : List.copyOf(topNaverCategoryCandidates);
@@ -23,11 +24,21 @@ public record MyCategoryMatchResult(
             List<CategoryMatchCandidate> topNaverCategoryCandidates,
             String llmSelectedCategory
     ) {
-        return new MyCategoryMatchResult(MyCategoryMatchStatus.MATCHED, myCategoryCode, naverCategory, topNaverCategoryCandidates, llmSelectedCategory);
+        return new MyCategoryMatchResult(MyCategoryMatchStatus.MATCHED, myCategoryCode, naverCategory, topNaverCategoryCandidates, llmSelectedCategory, null);
+    }
+
+    public static MyCategoryMatchResult matched(
+            String myCategoryCode,
+            String naverCategory,
+            List<CategoryMatchCandidate> topNaverCategoryCandidates,
+            String llmSelectedCategory,
+            String llmStatus
+    ) {
+        return new MyCategoryMatchResult(MyCategoryMatchStatus.MATCHED, myCategoryCode, naverCategory, topNaverCategoryCandidates, llmSelectedCategory, llmStatus);
     }
 
     public static MyCategoryMatchResult noCategoryMatch() {
-        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_CATEGORY_MATCH, null, null, List.of(), null);
+        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_CATEGORY_MATCH, null, null, List.of(), null, null);
     }
 
     public static MyCategoryMatchResult noCategoryMatch(List<CategoryMatchCandidate> topNaverCategoryCandidates) {
@@ -38,7 +49,15 @@ public record MyCategoryMatchResult(
             List<CategoryMatchCandidate> topNaverCategoryCandidates,
             String llmSelectedCategory
     ) {
-        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_CATEGORY_MATCH, null, null, topNaverCategoryCandidates, llmSelectedCategory);
+        return noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, null);
+    }
+
+    public static MyCategoryMatchResult noCategoryMatch(
+            List<CategoryMatchCandidate> topNaverCategoryCandidates,
+            String llmSelectedCategory,
+            String llmStatus
+    ) {
+        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_CATEGORY_MATCH, null, null, topNaverCategoryCandidates, llmSelectedCategory, llmStatus);
     }
 
     public static MyCategoryMatchResult noMyCategoryMapping(String naverCategory, List<CategoryMatchCandidate> topNaverCategoryCandidates) {
@@ -50,7 +69,16 @@ public record MyCategoryMatchResult(
             List<CategoryMatchCandidate> topNaverCategoryCandidates,
             String llmSelectedCategory
     ) {
-        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_MY_CATEGORY_MAPPING, null, naverCategory, topNaverCategoryCandidates, llmSelectedCategory);
+        return noMyCategoryMapping(naverCategory, topNaverCategoryCandidates, llmSelectedCategory, null);
+    }
+
+    public static MyCategoryMatchResult noMyCategoryMapping(
+            String naverCategory,
+            List<CategoryMatchCandidate> topNaverCategoryCandidates,
+            String llmSelectedCategory,
+            String llmStatus
+    ) {
+        return new MyCategoryMatchResult(MyCategoryMatchStatus.NO_MY_CATEGORY_MAPPING, null, naverCategory, topNaverCategoryCandidates, llmSelectedCategory, llmStatus);
     }
 
     public List<String> topNaverCategories() {
