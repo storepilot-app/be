@@ -47,6 +47,8 @@ public class KeywordExcelFillService {
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
     private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
     private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
+    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
+    private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
     private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
     private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
@@ -92,6 +94,7 @@ public class KeywordExcelFillService {
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
             ensureTopNaverCategoryHeaders(headerRow);
+            applyTopNaverCategoryColumnWidths(sheet);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
@@ -328,6 +331,13 @@ public class KeywordExcelFillService {
                     TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index,
                     TOP_NAVER_CATEGORIES_HEADER_PREFIX + (index + 1)
             );
+        }
+    }
+
+    private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
+        sheet.setColumnWidth(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
     }
 
