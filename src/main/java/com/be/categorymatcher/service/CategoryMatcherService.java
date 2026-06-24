@@ -11,10 +11,15 @@ import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
 import com.be.navercategory.repository.NaverCategoryVersionRepository;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Comparator;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -72,6 +77,84 @@ public class CategoryMatcherService {
                         llmStatus,
                         llmStatusDetail
                 ));
+    }
+
+    public Map<Integer, MyCategoryMatchResult> findMyCategoryCodes(
+            List<CategoryMatchProductRequest> products,
+            String userKey
+    ) {
+        if (products == null || products.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Integer, MyCategoryMatchResult> defaultResults = products.stream()
+                .collect(Collectors.toMap(
+                        CategoryMatchProductRequest::rowId,
+                        product -> MyCategoryMatchResult.noCategoryMatch(),
+                        (first, second) -> first,
+                        HashMap::new
+                ));
+
+        if (userKey == null || userKey.isBlank()) {
+            return defaultResults;
+        }
+
+        Optional<NaverCategoryVersion> activeVersion = naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc();
+        if (activeVersion.isEmpty()) {
+            return defaultResults;
+        }
+
+        List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
+        Map<Integer, CategoryMatchPrediction> predictions = predictBatchByAi(activeVersion.get().getId(), products, categories);
+        Map<Long, NaverCategory> categoriesById = categories.stream()
+                .collect(Collectors.toMap(NaverCategory::getId, Function.identity(), (first, second) -> first));
+        Map<Integer, MyCategoryMatchResult> results = new HashMap<>(defaultResults);
+
+        for (CategoryMatchProductRequest product : products) {
+            CategoryMatchPrediction prediction = predictions.get(product.rowId());
+            if (prediction == null) {
+                continue;
+            }
+
+            List<CategoryMatchCandidate> topNaverCategoryCandidates = topCandidates(prediction);
+            String llmSelectedCategory = Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null;
+            String llmStatus = prediction.llmStatus();
+            String llmStatusDetail = prediction.llmStatusDetail();
+            NaverCategory category = prediction.categoryId() == null ? null : categoriesById.get(prediction.categoryId());
+            if (category == null) {
+                category = findCategoryFromPrediction(categories, prediction).orElse(null);
+            }
+
+            if (category == null) {
+                results.put(product.rowId(), MyCategoryMatchResult.noCategoryMatch(
+                        topNaverCategoryCandidates,
+                        llmSelectedCategory,
+                        llmStatus,
+                        llmStatusDetail
+                ));
+                continue;
+            }
+
+            NaverCategory matchedCategory = category;
+            results.put(product.rowId(), findMapping(userKey.trim(), matchedCategory)
+                    .map(mapping -> MyCategoryMatchResult.matched(
+                            mapping.getMyCategoryCode(),
+                            matchedCategory.getFullPath(),
+                            topNaverCategoryCandidates,
+                            llmSelectedCategory,
+                            llmStatus,
+                            llmStatusDetail
+                    ))
+                    .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(
+                            matchedCategory.getFullPath(),
+                            topNaverCategoryCandidates,
+                            llmSelectedCategory,
+                            llmStatus,
+                            llmStatusDetail
+                    )));
+        }
+
+        return results;
     }
 
     public void rebuildEmbeddings(Long versionId) {
@@ -140,6 +223,47 @@ public class CategoryMatcherService {
                         Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null,
                         prediction.llmStatus(),
                         prediction.llmStatusDetail()
+                ));
+    }
+
+    private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
+            Long versionId,
+            List<CategoryMatchProductRequest> products,
+            List<NaverCategory> categories,
+            boolean rebuildOnMissingCache
+    ) {
+        Optional<List<CategoryMatchPrediction>> firstResult = categoryMatcherAiClient.predict(versionId, products)
+                .map(response -> response.results() == null ? List.<CategoryMatchPrediction>of() : response.results());
+        if (firstResult.isPresent() && !firstResult.get().isEmpty()) {
+            return toPredictionMap(firstResult.get());
+        }
+
+        if (rebuildOnMissingCache) {
+            categoryMatcherAiClient.rebuild(versionId, categories);
+            return categoryMatcherAiClient.predict(versionId, products)
+                    .map(response -> response.results() == null ? List.<CategoryMatchPrediction>of() : response.results())
+                    .map(this::toPredictionMap)
+                    .orElseGet(Collections::emptyMap);
+        }
+
+        return Collections.emptyMap();
+    }
+
+    private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
+            Long versionId,
+            List<CategoryMatchProductRequest> products,
+            List<NaverCategory> categories
+    ) {
+        return predictBatchByAi(versionId, products, categories, true);
+    }
+
+    private Map<Integer, CategoryMatchPrediction> toPredictionMap(List<CategoryMatchPrediction> predictions) {
+        return predictions.stream()
+                .collect(Collectors.toMap(
+                        CategoryMatchPrediction::rowId,
+                        Function.identity(),
+                        (first, second) -> first,
+                        HashMap::new
                 ));
     }
 

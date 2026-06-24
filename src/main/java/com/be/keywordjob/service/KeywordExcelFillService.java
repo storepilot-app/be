@@ -2,6 +2,7 @@ package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
+import com.be.categorymatcher.dto.CategoryMatchProductRequest;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -106,6 +108,7 @@ public class KeywordExcelFillService {
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
+            List<ProductExcelRow> productRows = new ArrayList<>();
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
@@ -119,7 +122,22 @@ public class KeywordExcelFillService {
                     continue;
                 }
 
-                MyCategoryMatchResult myCategoryResult = categoryMatcherService.findMyCategoryCode(productName, userKey);
+                productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
+            }
+
+            List<CategoryMatchProductRequest> products = productRows.stream()
+                    .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
+                    .toList();
+            Map<Integer, MyCategoryMatchResult> myCategoryResults = categoryMatcherService.findMyCategoryCodes(products, userKey);
+
+            for (ProductExcelRow productRow : productRows) {
+                Row row = productRow.row();
+                String productName = productRow.productName();
+                String category = productRow.category();
+                MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
+                        productRow.rowId(),
+                        MyCategoryMatchResult.noCategoryMatch()
+                );
                 String myCategory = resolveMyCategory(myCategoryResult);
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
 
@@ -140,6 +158,9 @@ public class KeywordExcelFillService {
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
         }
+    }
+
+    private record ProductExcelRow(int rowId, Row row, String productName, String category) {
     }
 
     public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
