@@ -153,6 +153,7 @@ public class KeywordExcelFillService {
                 writeLlmSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
             }
+            writeLlmSelectedRatio(sheet, productRows, myCategoryResults);
 
             workbook.write(outputStream);
             String filename = buildDownloadFilename(file.getOriginalFilename());
@@ -455,6 +456,33 @@ public class KeywordExcelFillService {
         } else if ("REJECTED".equals(result.llmStatus())) {
             cell.setCellStyle(styles.rejected());
         }
+    }
+
+    private void writeLlmSelectedRatio(
+            Sheet sheet,
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults
+    ) {
+        if (productRows.isEmpty()) {
+            return;
+        }
+
+        long selectedCount = productRows.stream()
+                .map(productRow -> myCategoryResults.get(productRow.rowId()))
+                .filter(result -> result != null && "SELECTED".equals(result.llmStatus()))
+                .count();
+        int totalCount = productRows.size();
+        double ratio = (double) selectedCount * 100 / totalCount;
+        int summaryRowIndex = productRows.stream()
+                .mapToInt(ProductExcelRow::rowId)
+                .max()
+                .orElse(sheet.getLastRowNum()) + 1;
+        Row summaryRow = sheet.getRow(summaryRowIndex);
+        if (summaryRow == null) {
+            summaryRow = sheet.createRow(summaryRowIndex);
+        }
+        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX)
+                .setCellValue(String.format(Locale.ROOT, "\uC120\uD0DD\uB428 \uBE44\uC728: %d/%d (%.2f%%)", selectedCount, totalCount, ratio));
     }
 
     private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
