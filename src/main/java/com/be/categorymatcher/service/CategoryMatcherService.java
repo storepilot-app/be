@@ -176,7 +176,7 @@ public class CategoryMatcherService {
                 .filter(category -> !bestRuleKeyword(category).isBlank())
                 .filter(category -> normalizedProductName.contains(normalize(bestRuleKeyword(category))))
                 .sorted(Comparator.comparingInt((NaverCategory category) -> normalize(bestRuleKeyword(category)).length()).reversed())
-                .limit(5)
+                .limit(10)
                 .toList();
 
         if (candidates.isEmpty()) {
@@ -280,7 +280,7 @@ public class CategoryMatcherService {
         }
         return prediction.candidates().stream()
                 .filter(candidate -> candidate.fullPath() != null && !candidate.fullPath().isBlank())
-                .limit(5)
+                .limit(10)
                 .toList();
     }
 
@@ -293,7 +293,7 @@ public class CategoryMatcherService {
                         category.getFullPath(),
                         1.0
                 ))
-                .limit(5)
+                .limit(10)
                 .toList();
     }
 

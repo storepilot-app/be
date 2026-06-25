@@ -51,9 +51,9 @@ public class KeywordExcelFillService {
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
     private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
-    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
-    private static final int LLM_SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
-    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
+    private static final int TOP_NAVER_CATEGORIES_COUNT = 10;
+    private static final int LLM_SELECTED_CATEGORY_COLUMN_INDEX = 37; // AL
+    private static final int LLM_STATUS_COLUMN_INDEX = 38; // AM
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int LLM_SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
