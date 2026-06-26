@@ -60,19 +60,19 @@ public class KeywordExcelFillService {
     private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
     private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
-    private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
-    private static final String NAVER_CATEGORY_HEADER = "\uB124\uC774\uBC84\uCE74\uD14C";
-    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "\uC0C1\uD488\uBA85";
+    private static final String KEYWORD_HEADER = "키워드";
+    private static final String MY_CATEGORY_HEADER = "마이카테";
+    private static final String NAVER_CATEGORY_HEADER = "네이버카테";
+    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
-    private static final String LLM_SELECTED_CATEGORY_HEADER = "LLM\uC120\uD0DD\uCE74\uD14C\uACE0\uB9AC";
-    private static final String LLM_STATUS_HEADER = "LLM\uC0C1\uD0DC";
-    private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
-    private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
-    private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
-    private static final String NO_CATEGORY_MATCH = "\uB9E4\uCE6D\uC5C6\uC74C";
-    private static final String NO_MY_CATEGORY_MAPPING = "\uB9C8\uC774\uCE74\uD14C \uC5C6\uC74C";
-    private static final String NO_LLM_SELECTED_CATEGORY = "\uC5C6\uC74C";
+    private static final String LLM_SELECTED_CATEGORY_HEADER = "LLM선택카테고리";
+    private static final String LLM_STATUS_HEADER = "LLM상태";
+    private static final String IMAGE_URL_COLUMN = "목록이미지1";
+    private static final String PRODUCT_CODE_COLUMN = "상품코드";
+    private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
+    private static final String NO_CATEGORY_MATCH = "매칭없음";
+    private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
+    private static final String NO_LLM_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
@@ -399,13 +399,13 @@ public class KeywordExcelFillService {
         }
 
         String text = productName.toLowerCase(Locale.ROOT);
-        if (text.contains("\uC5FD\uC11C")) return "\uC5FD\uC11C";
-        if (text.contains("\uB2E4\uC774\uC5B4\uB9AC")) return "\uB2E4\uC774\uC5B4\uB9AC";
-        if (text.contains("\uAC00\uACC4\uBD80")) return "\uAC00\uACC4\uBD80";
-        if (text.contains("\uBC14\uC778\uB354")) return "\uBC14\uC778\uB354";
-        if (text.contains("\uD0A4\uBCF4\uB4DC")) return "\uD0A4\uBCF4\uB4DC";
-        if (text.contains("\uC2A4\uD2F0\uCEE4") || text.contains("\uC52C")) return "\uC2A4\uD2F0\uCEE4";
-        return "\uAE30\uD0C0";
+        if (text.contains("엽서")) return "엽서";
+        if (text.contains("다이어리")) return "다이어리";
+        if (text.contains("가계부")) return "가계부";
+        if (text.contains("바인더")) return "바인더";
+        if (text.contains("키보드")) return "키보드";
+        if (text.contains("스티커") || text.contains("씰")) return "스티커";
+        return "기타";
     }
 
     private String resolveMyCategory(MyCategoryMatchResult result) {
@@ -482,19 +482,19 @@ public class KeywordExcelFillService {
             summaryRow = sheet.createRow(summaryRowIndex);
         }
         summaryRow.createCell(LLM_STATUS_COLUMN_INDEX)
-                .setCellValue(String.format(Locale.ROOT, "\uC120\uD0DD\uB428 \uBE44\uC728: %d/%d (%.2f%%)", selectedCount, totalCount, ratio));
+                .setCellValue(String.format(Locale.ROOT, "선택됨 비율: %d/%d (%.2f%%)", selectedCount, totalCount, ratio));
     }
 
     private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
         String status;
         if (llmStatus == null || llmStatus.isBlank()) {
-            status = "\uD638\uCD9C\uC548\uD568";
+            status = "호출안함";
         } else {
             status = switch (llmStatus) {
-                case "SELECTED" -> "\uC120\uD0DD\uB428";
-                case "REJECTED" -> "\uAC70\uC808\uB428";
-                case "FAILED" -> "\uD638\uCD9C\uC2E4\uD328";
-                case "SKIPPED" -> "\uD638\uCD9C\uC548\uD568";
+                case "SELECTED" -> "선택됨";
+                case "REJECTED" -> "거절됨";
+                case "FAILED" -> "호출실패";
+                case "SKIPPED" -> "호출안함";
                 default -> llmStatus;
             };
         }
@@ -536,14 +536,14 @@ public class KeywordExcelFillService {
         List<String> tokens = tokenize(productName);
 
         addKeyword(keywords, myCategory);
-        addKeyword(keywords, myCategory + "\uCD94\uCC9C");
-        addKeyword(keywords, myCategory + "\uC120\uBB3C");
-        addKeyword(keywords, myCategory + "\uBB38\uAD6C");
-        addKeyword(keywords, "\uAC10\uC131" + myCategory);
-        addKeyword(keywords, "\uADC0\uC5EC\uC6B4" + myCategory);
-        addKeyword(keywords, "\uB514\uC790\uC778" + myCategory);
-        addKeyword(keywords, "\uD559\uC0DD" + myCategory);
-        addKeyword(keywords, "\uC0AC\uBB34\uC6A9" + myCategory);
+        addKeyword(keywords, myCategory + "추천");
+        addKeyword(keywords, myCategory + "선물");
+        addKeyword(keywords, myCategory + "문구");
+        addKeyword(keywords, "감성" + myCategory);
+        addKeyword(keywords, "귀여운" + myCategory);
+        addKeyword(keywords, "디자인" + myCategory);
+        addKeyword(keywords, "학생" + myCategory);
+        addKeyword(keywords, "사무용" + myCategory);
 
         for (String token : tokens) {
             addKeyword(keywords, token + myCategory);
@@ -569,7 +569,7 @@ public class KeywordExcelFillService {
         String[] rawTokens = text.split("[\\s_/(),\\[\\]-]+");
         List<String> tokens = new ArrayList<>();
         for (String rawToken : rawTokens) {
-            String token = rawToken.replaceAll("[^\uAC00-\uD7A3A-Za-z0-9]", "").trim();
+            String token = rawToken.replaceAll("[^\\p{IsHangul}A-Za-z0-9]", "").trim();
             if (token.length() >= 2 && !tokens.contains(token)) {
                 tokens.add(token);
             }
