@@ -152,7 +152,7 @@ public class KeywordExcelFillService {
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                writeSimilarProducts(row, myCategoryResult);
+                writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
                 writeSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
                 clearLegacyOutputCells(row);
@@ -429,7 +429,11 @@ public class KeywordExcelFillService {
         row.createCell(NAVER_CATEGORY_COLUMN_INDEX).setCellValue(naverCategory);
     }
 
-    private void writeSimilarProducts(Row row, MyCategoryMatchResult result) {
+    private void writeSimilarProducts(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedCategoryStyle
+    ) {
         List<CategoryMatchSimilarProduct> similarProducts = result.similarProducts();
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
             Cell cell = row.createCell(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index);
@@ -441,7 +445,13 @@ public class KeywordExcelFillService {
                 cell.setCellValue("");
                 continue;
             }
-            cell.setCellValue(formatSimilarProduct(similarProducts.get(index)));
+            CategoryMatchSimilarProduct similarProduct = similarProducts.get(index);
+            cell.setCellValue(formatSimilarProduct(similarProduct));
+            if ("SELECTED".equals(result.llmStatus())
+                    && result.naverCategory() != null
+                    && result.naverCategory().equals(similarProduct.fullPath())) {
+                cell.setCellStyle(selectedCategoryStyle);
+            }
         }
     }
 
