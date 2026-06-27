@@ -1,8 +1,8 @@
 package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
-import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
+import com.be.categorymatcher.dto.CategoryMatchSimilarProduct;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
@@ -66,7 +66,7 @@ public class KeywordExcelFillService {
     private static final String MY_CATEGORY_HEADER = "마이카테";
     private static final String NAVER_CATEGORY_HEADER = "네이버카테";
     private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
-    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
+    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
     private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
     private static final String LLM_STATUS_HEADER = "LLM상태";
     private static final String IMAGE_URL_COLUMN = "목록이미지1";
@@ -152,7 +152,7 @@ public class KeywordExcelFillService {
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                writeTopNaverCategories(row, myCategoryResult);
+                writeSimilarProducts(row, myCategoryResult);
                 writeSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
                 clearLegacyOutputCells(row);
@@ -429,19 +429,19 @@ public class KeywordExcelFillService {
         row.createCell(NAVER_CATEGORY_COLUMN_INDEX).setCellValue(naverCategory);
     }
 
-    private void writeTopNaverCategories(Row row, MyCategoryMatchResult result) {
-        List<CategoryMatchCandidate> candidates = result.topNaverCategoryCandidates();
+    private void writeSimilarProducts(Row row, MyCategoryMatchResult result) {
+        List<CategoryMatchSimilarProduct> similarProducts = result.similarProducts();
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
             Cell cell = row.createCell(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index);
-            if (candidates.isEmpty() && index == 0) {
-                cell.setCellValue(NO_CATEGORY_MATCH);
+            if (similarProducts.isEmpty() && index == 0) {
+                cell.setCellValue("유사상품 없음");
                 continue;
             }
-            if (index >= candidates.size()) {
+            if (index >= similarProducts.size()) {
                 cell.setCellValue("");
                 continue;
             }
-            cell.setCellValue(formatTopNaverCategory(candidates.get(index)));
+            cell.setCellValue(formatSimilarProduct(similarProducts.get(index)));
         }
     }
 
@@ -552,8 +552,14 @@ public class KeywordExcelFillService {
     private record LlmStatusCellStyles(CellStyle selected, CellStyle rejected) {
     }
 
-    private String formatTopNaverCategory(CategoryMatchCandidate candidate) {
-        return String.format(Locale.ROOT, "%s (%.4f)", candidate.fullPath(), candidate.score());
+    private String formatSimilarProduct(CategoryMatchSimilarProduct product) {
+        return String.format(
+                Locale.ROOT,
+                "%s | %s (%.4f)",
+                product.productName(),
+                product.fullPath(),
+                product.similarity()
+        );
     }
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {

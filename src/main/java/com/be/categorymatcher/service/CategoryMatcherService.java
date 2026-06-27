@@ -5,6 +5,7 @@ import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchPrediction;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
 import com.be.categorymatcher.dto.CategoryMatchMappingItem;
+import com.be.categorymatcher.dto.CategoryMatchSimilarProduct;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.repository.MyCategoryMappingRepository;
@@ -67,12 +68,15 @@ public class CategoryMatcherService {
         String llmSelectedCategory = matchContext.get().llmSelectedCategory();
         String llmStatus = matchContext.get().llmStatus();
         String llmStatusDetail = matchContext.get().llmStatusDetail();
+        List<CategoryMatchSimilarProduct> similarProducts = matchContext.get().similarProducts();
 
         if (category == null) {
-            return MyCategoryMatchResult.noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus, llmStatusDetail);
+            return MyCategoryMatchResult
+                    .noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus, llmStatusDetail)
+                    .withSimilarProducts(similarProducts);
         }
 
-        return findMapping(userKey.trim(), category)
+        MyCategoryMatchResult result = findMapping(userKey.trim(), category)
                 .map(mapping -> MyCategoryMatchResult.matched(
                         mapping.getMyCategoryCode(),
                         category.getFullPath(),
@@ -88,6 +92,7 @@ public class CategoryMatcherService {
                         llmStatus,
                         llmStatusDetail
                 ));
+        return result.withSimilarProducts(similarProducts);
     }
 
     public Map<Integer, MyCategoryMatchResult> findMyCategoryCodes(
@@ -139,23 +144,21 @@ public class CategoryMatcherService {
             String llmSelectedCategory = Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null;
             String llmStatus = prediction.llmStatus();
             String llmStatusDetail = prediction.llmStatusDetail();
+            List<CategoryMatchSimilarProduct> similarProducts = similarProducts(prediction);
             NaverCategory category = prediction.categoryId() == null ? null : categoriesById.get(prediction.categoryId());
             if (category == null) {
                 category = findCategoryFromPrediction(categories, prediction).orElse(null);
             }
 
             if (category == null) {
-                results.put(product.rowId(), MyCategoryMatchResult.noCategoryMatch(
-                        topNaverCategoryCandidates,
-                        llmSelectedCategory,
-                        llmStatus,
-                        llmStatusDetail
-                ));
+                results.put(product.rowId(), MyCategoryMatchResult
+                        .noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus, llmStatusDetail)
+                        .withSimilarProducts(similarProducts));
                 continue;
             }
 
             NaverCategory matchedCategory = category;
-            results.put(product.rowId(), findMapping(userKey.trim(), matchedCategory)
+            MyCategoryMatchResult result = findMapping(userKey.trim(), matchedCategory)
                     .map(mapping -> MyCategoryMatchResult.matched(
                             mapping.getMyCategoryCode(),
                             matchedCategory.getFullPath(),
@@ -170,7 +173,8 @@ public class CategoryMatcherService {
                             llmSelectedCategory,
                             llmStatus,
                             llmStatusDetail
-                    )));
+                    ));
+            results.put(product.rowId(), result.withSimilarProducts(similarProducts));
         }
 
         return results;
@@ -202,7 +206,14 @@ public class CategoryMatcherService {
             return Optional.empty();
         }
 
-        return Optional.of(new CategoryMatchContext(candidates.get(0), toCandidates(candidates), null, "SKIPPED", null));
+        return Optional.of(new CategoryMatchContext(
+                candidates.get(0),
+                toCandidates(candidates),
+                null,
+                "SKIPPED",
+                null,
+                List.of()
+        ));
     }
 
     private String bestRuleKeyword(NaverCategory category) {
@@ -249,7 +260,8 @@ public class CategoryMatcherService {
                         topCandidates(prediction),
                         Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null,
                         prediction.llmStatus(),
-                        prediction.llmStatusDetail()
+                        prediction.llmStatusDetail(),
+                        similarProducts(prediction)
                 ));
     }
 
@@ -333,6 +345,10 @@ public class CategoryMatcherService {
                 .toList();
     }
 
+    private List<CategoryMatchSimilarProduct> similarProducts(CategoryMatchPrediction prediction) {
+        return prediction.similarProducts() == null ? List.of() : prediction.similarProducts();
+    }
+
     private List<CategoryMatchCandidate> toCandidates(List<NaverCategory> categories) {
         return categories.stream()
                 .filter(category -> category.getFullPath() != null && !category.getFullPath().isBlank())
@@ -378,7 +394,8 @@ public class CategoryMatcherService {
             List<CategoryMatchCandidate> topNaverCategoryCandidates,
             String llmSelectedCategory,
             String llmStatus,
-            String llmStatusDetail
+            String llmStatusDetail,
+            List<CategoryMatchSimilarProduct> similarProducts
     ) {
     }
 }

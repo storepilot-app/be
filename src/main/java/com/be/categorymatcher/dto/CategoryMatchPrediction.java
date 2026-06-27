@@ -12,6 +12,7 @@ public record CategoryMatchPrediction(
         Boolean llmUsed,
         String llmSelectedCategory,
         String llmStatus,
-        String llmStatusDetail
+        String llmStatusDetail,
+        List<CategoryMatchSimilarProduct> similarProducts
 ) {
 }
