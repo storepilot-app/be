@@ -520,6 +520,7 @@ public class KeywordExcelFillService {
                 case "FAILED" -> "호출실패";
                 case "SKIPPED" -> "호출안함";
                 case "AUTO_SELECTED" -> "자동선택";
+                case "NO_SIMILAR_PRODUCTS" -> "유사상품 없음";
                 default -> llmStatus;
             };
         }
