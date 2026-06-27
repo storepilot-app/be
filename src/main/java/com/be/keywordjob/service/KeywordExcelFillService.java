@@ -451,7 +451,7 @@ public class KeywordExcelFillService {
     private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
         Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
-        if ("SELECTED".equals(result.llmStatus())) {
+        if ("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus())) {
             cell.setCellStyle(styles.selected());
         } else if ("REJECTED".equals(result.llmStatus())) {
             cell.setCellStyle(styles.rejected());
@@ -495,6 +495,7 @@ public class KeywordExcelFillService {
                 case "REJECTED" -> "거절됨";
                 case "FAILED" -> "호출실패";
                 case "SKIPPED" -> "호출안함";
+                case "AUTO_SELECTED" -> "자동선택";
                 default -> llmStatus;
             };
         }

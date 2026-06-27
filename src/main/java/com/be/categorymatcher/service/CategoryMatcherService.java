@@ -4,9 +4,11 @@ import com.be.categorymatcher.client.CategoryMatcherAiClient;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchPrediction;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
+import com.be.categorymatcher.dto.CategoryMatchMappingItem;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.repository.MyCategoryMappingRepository;
+import com.be.mycategory.repository.MyCategoryMappingVersionRepository;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
@@ -30,6 +32,7 @@ public class CategoryMatcherService {
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
+    private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
 
     public MyCategoryMatchResult findMyCategoryCode(String productName, String userKey) {
         if (productName == null || productName.isBlank() || userKey == null || userKey.isBlank()) {
@@ -43,7 +46,15 @@ public class CategoryMatcherService {
 
         List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
         // Rule-based matching is temporarily disabled to inspect AI category scores.
-        Optional<CategoryMatchContext> matchContext = findByAi(activeVersion.get().getId(), productName, categories);
+        String normalizedUserKey = userKey.trim();
+        List<CategoryMatchMappingItem> mappings = activeMappingItems(normalizedUserKey);
+        Optional<CategoryMatchContext> matchContext = findByAi(
+                activeVersion.get().getId(),
+                productName,
+                categories,
+                normalizedUserKey,
+                mappings
+        );
 //        Optional<CategoryMatchContext> matchContext = findByRule(productName, categories)
 //                .or(() -> findByAi(activeVersion.get().getId(), productName, categories));
 
@@ -105,7 +116,15 @@ public class CategoryMatcherService {
         }
 
         List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
-        Map<Integer, CategoryMatchPrediction> predictions = predictBatchByAi(activeVersion.get().getId(), products, categories);
+        String normalizedUserKey = userKey.trim();
+        List<CategoryMatchMappingItem> mappings = activeMappingItems(normalizedUserKey);
+        Map<Integer, CategoryMatchPrediction> predictions = predictBatchByAi(
+                activeVersion.get().getId(),
+                products,
+                categories,
+                normalizedUserKey,
+                mappings
+        );
         Map<Long, NaverCategory> categoriesById = categories.stream()
                 .collect(Collectors.toMap(NaverCategory::getId, Function.identity(), (first, second) -> first));
         Map<Integer, MyCategoryMatchResult> results = new HashMap<>(defaultResults);
@@ -199,23 +218,31 @@ public class CategoryMatcherService {
         return category.getLevel1();
     }
 
-    private Optional<CategoryMatchContext> findByAi(Long versionId, String productName, List<NaverCategory> categories) {
+    private Optional<CategoryMatchContext> findByAi(
+            Long versionId,
+            String productName,
+            List<NaverCategory> categories,
+            String userKey,
+            List<CategoryMatchMappingItem> mappings
+    ) {
         List<CategoryMatchProductRequest> products = List.of(new CategoryMatchProductRequest(1, productName));
-        Optional<CategoryMatchContext> firstResult = predictByAi(versionId, products, categories);
+        Optional<CategoryMatchContext> firstResult = predictByAi(versionId, products, categories, userKey, mappings);
         if (firstResult.isPresent()) {
             return firstResult;
         }
 
         categoryMatcherAiClient.rebuild(versionId, categories);
-        return predictByAi(versionId, products, categories);
+        return predictByAi(versionId, products, categories, userKey, mappings);
     }
 
     private Optional<CategoryMatchContext> predictByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products,
-            List<NaverCategory> categories
+            List<NaverCategory> categories,
+            String userKey,
+            List<CategoryMatchMappingItem> mappings
     ) {
-        return categoryMatcherAiClient.predict(versionId, products)
+        return categoryMatcherAiClient.predict(versionId, userKey, products, mappings)
                 .flatMap(response -> response.results().stream().findFirst())
                 .map(prediction -> new CategoryMatchContext(
                         findCategoryFromPrediction(categories, prediction).orElse(null),
@@ -230,9 +257,11 @@ public class CategoryMatcherService {
             Long versionId,
             List<CategoryMatchProductRequest> products,
             List<NaverCategory> categories,
-            boolean rebuildOnMissingCache
+            boolean rebuildOnMissingCache,
+            String userKey,
+            List<CategoryMatchMappingItem> mappings
     ) {
-        Optional<List<CategoryMatchPrediction>> firstResult = categoryMatcherAiClient.predict(versionId, products)
+        Optional<List<CategoryMatchPrediction>> firstResult = categoryMatcherAiClient.predict(versionId, userKey, products, mappings)
                 .map(response -> response.results() == null ? List.<CategoryMatchPrediction>of() : response.results());
         if (firstResult.isPresent() && !firstResult.get().isEmpty()) {
             return toPredictionMap(firstResult.get());
@@ -240,7 +269,7 @@ public class CategoryMatcherService {
 
         if (rebuildOnMissingCache) {
             categoryMatcherAiClient.rebuild(versionId, categories);
-            return categoryMatcherAiClient.predict(versionId, products)
+            return categoryMatcherAiClient.predict(versionId, userKey, products, mappings)
                     .map(response -> response.results() == null ? List.<CategoryMatchPrediction>of() : response.results())
                     .map(this::toPredictionMap)
                     .orElseGet(Collections::emptyMap);
@@ -252,9 +281,29 @@ public class CategoryMatcherService {
     private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products,
-            List<NaverCategory> categories
+            List<NaverCategory> categories,
+            String userKey,
+            List<CategoryMatchMappingItem> mappings
     ) {
-        return predictBatchByAi(versionId, products, categories, true);
+        return predictBatchByAi(versionId, products, categories, true, userKey, mappings);
+    }
+
+    private List<CategoryMatchMappingItem> activeMappingItems(String userKey) {
+        return myCategoryMappingVersionRepository
+                .findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(userKey)
+                .map(version -> myCategoryMappingRepository.findByUserKeyAndVersionId(userKey, version.getId()))
+                .orElseGet(List::of)
+                .stream()
+                .filter(mapping -> mapping.getNaverCategoryId() != null)
+                .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
+                .filter(mapping -> mapping.getNaverCategoryFullPath() != null && !mapping.getNaverCategoryFullPath().isBlank())
+                .map(mapping -> new CategoryMatchMappingItem(
+                        mapping.getMyCategoryCode(),
+                        mapping.getNaverCategoryId(),
+                        mapping.getNaverCategoryCode(),
+                        mapping.getNaverCategoryFullPath()
+                ))
+                .toList();
     }
 
     private Map<Integer, CategoryMatchPrediction> toPredictionMap(List<CategoryMatchPrediction> predictions) {

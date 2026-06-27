@@ -15,8 +15,8 @@ spring:
         format_sql: true
   servlet:
     multipart:
-      max-file-size: 30MB
-      max-request-size: 30MB
+      max-file-size: 50MB
+      max-request-size: 150MB
 
 storepilot:
   upload-dir: uploads

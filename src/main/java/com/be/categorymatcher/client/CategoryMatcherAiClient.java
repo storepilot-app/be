@@ -4,13 +4,22 @@ import com.be.categorymatcher.dto.CategoryEmbeddingItem;
 import com.be.categorymatcher.dto.CategoryEmbeddingRebuildRequest;
 import com.be.categorymatcher.dto.CategoryMatchPredictRequest;
 import com.be.categorymatcher.dto.CategoryMatchPredictResponse;
+import com.be.categorymatcher.dto.CategoryMatchMappingItem;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
+import com.be.categorymatcher.dto.ProductFeedbackAiRequest;
+import com.be.categorymatcher.dto.ProductFeedbackAiResponse;
+import com.be.categorymatcher.dto.ProductIndexRebuildResponse;
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
 import com.be.navercategory.domain.NaverCategory;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -44,16 +53,58 @@ public class CategoryMatcherAiClient {
         }
     }
 
-    public Optional<CategoryMatchPredictResponse> predict(Long versionId, List<CategoryMatchProductRequest> products) {
+    public Optional<CategoryMatchPredictResponse> predict(
+            Long versionId,
+            String userKey,
+            List<CategoryMatchProductRequest> products,
+            List<CategoryMatchMappingItem> mappings
+    ) {
         try {
             CategoryMatchPredictResponse response = restClient().post()
                     .uri("/ai/categories/predict")
-                    .body(new CategoryMatchPredictRequest(versionId, products))
+                    .body(new CategoryMatchPredictRequest(versionId, userKey, products, mappings))
                     .retrieve()
                     .body(CategoryMatchPredictResponse.class);
             return Optional.ofNullable(response);
         } catch (RestClientException ignored) {
             return Optional.empty();
+        }
+    }
+
+    public ProductIndexRebuildResponse rebuildProductIndex(String userKey, List<MultipartFile> files) {
+        MultipartBodyBuilder body = new MultipartBodyBuilder();
+        body.part("userKey", userKey);
+        files.forEach(file -> body.part("files", file.getResource()));
+
+        try {
+            ProductIndexRebuildResponse response = restClient().post()
+                    .uri("/ai/categories/product-index/rebuild")
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body.build())
+                    .retrieve()
+                    .body(ProductIndexRebuildResponse.class);
+            if (response == null) {
+                throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "AI server returned an empty product index response.");
+            }
+            return response;
+        } catch (RestClientException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "Failed to rebuild the historical product index.");
+        }
+    }
+
+    public ProductFeedbackAiResponse addProductFeedback(ProductFeedbackAiRequest request) {
+        try {
+            ProductFeedbackAiResponse response = restClient().post()
+                    .uri("/ai/categories/product-index/feedback")
+                    .body(request)
+                    .retrieve()
+                    .body(ProductFeedbackAiResponse.class);
+            if (response == null) {
+                throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "AI server returned an empty feedback response.");
+            }
+            return response;
+        } catch (RestClientException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "Failed to update the historical product index.");
         }
     }
 

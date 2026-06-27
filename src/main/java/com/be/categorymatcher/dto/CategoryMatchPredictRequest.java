@@ -4,6 +4,8 @@ import java.util.List;
 
 public record CategoryMatchPredictRequest(
         Long versionId,
-        List<CategoryMatchProductRequest> products
+        String userKey,
+        List<CategoryMatchProductRequest> products,
+        List<CategoryMatchMappingItem> myCategoryMappings
 ) {
 }
