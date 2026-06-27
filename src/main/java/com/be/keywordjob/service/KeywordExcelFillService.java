@@ -51,12 +51,14 @@ public class KeywordExcelFillService {
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
     private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
-    private static final int TOP_NAVER_CATEGORIES_COUNT = 10;
-    private static final int LLM_SELECTED_CATEGORY_COLUMN_INDEX = 37; // AL
-    private static final int LLM_STATUS_COLUMN_INDEX = 38; // AM
+    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
+    private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
+    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
+    private static final int LEGACY_OUTPUT_START_COLUMN_INDEX = 34; // AI
+    private static final int LEGACY_OUTPUT_END_COLUMN_INDEX = 38; // AM
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int LLM_SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
+    private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
     private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
@@ -65,14 +67,14 @@ public class KeywordExcelFillService {
     private static final String NAVER_CATEGORY_HEADER = "네이버카테";
     private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "TOP-";
-    private static final String LLM_SELECTED_CATEGORY_HEADER = "LLM선택카테고리";
+    private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
     private static final String LLM_STATUS_HEADER = "LLM상태";
     private static final String IMAGE_URL_COLUMN = "목록이미지1";
     private static final String PRODUCT_CODE_COLUMN = "상품코드";
     private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
-    private static final String NO_LLM_SELECTED_CATEGORY = "없음";
+    private static final String NO_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
@@ -108,6 +110,7 @@ public class KeywordExcelFillService {
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
             ensureTopNaverCategoryHeaders(headerRow);
+            clearLegacyOutputCells(headerRow);
             applyTopNaverCategoryColumnWidths(sheet);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
@@ -150,10 +153,11 @@ public class KeywordExcelFillService {
                 writeNaverCategory(row, myCategoryResult);
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
                 writeTopNaverCategories(row, myCategoryResult);
-                writeLlmSelectedCategory(row, myCategoryResult);
+                writeSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
+                clearLegacyOutputCells(row);
             }
-            writeLlmSelectedRatio(sheet, productRows, myCategoryResults);
+            writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
 
             workbook.write(outputStream);
             String filename = buildDownloadFilename(file.getOriginalFilename());
@@ -368,7 +372,7 @@ public class KeywordExcelFillService {
                     TOP_NAVER_CATEGORIES_HEADER_PREFIX + (index + 1)
             );
         }
-        ensureHeader(headerRow, LLM_SELECTED_CATEGORY_COLUMN_INDEX, LLM_SELECTED_CATEGORY_HEADER);
+        ensureHeader(headerRow, SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_HEADER);
         ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
     }
 
@@ -377,7 +381,7 @@ public class KeywordExcelFillService {
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
             sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
-        sheet.setColumnWidth(LLM_SELECTED_CATEGORY_COLUMN_INDEX, LLM_SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
         sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
     }
 
@@ -441,11 +445,11 @@ public class KeywordExcelFillService {
         }
     }
 
-    private void writeLlmSelectedCategory(Row row, MyCategoryMatchResult result) {
-        String value = result.llmSelectedCategory() == null || result.llmSelectedCategory().isBlank()
-                ? NO_LLM_SELECTED_CATEGORY
-                : result.llmSelectedCategory();
-        row.createCell(LLM_SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
+    private void writeSelectedCategory(Row row, MyCategoryMatchResult result) {
+        String value = result.naverCategory() == null || result.naverCategory().isBlank()
+                ? NO_SELECTED_CATEGORY
+                : result.naverCategory();
+        row.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
     }
 
     private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
@@ -458,7 +462,7 @@ public class KeywordExcelFillService {
         }
     }
 
-    private void writeLlmSelectedRatio(
+    private void writeUnmatchedOrRejectedRatio(
             Sheet sheet,
             List<ProductExcelRow> productRows,
             Map<Integer, MyCategoryMatchResult> myCategoryResults
@@ -467,12 +471,14 @@ public class KeywordExcelFillService {
             return;
         }
 
-        long selectedCount = productRows.stream()
+        long unmatchedOrRejectedCount = productRows.stream()
                 .map(productRow -> myCategoryResults.get(productRow.rowId()))
-                .filter(result -> result != null && "SELECTED".equals(result.llmStatus()))
+                .filter(result -> result == null
+                        || result.status() == MyCategoryMatchStatus.NO_CATEGORY_MATCH
+                        || "REJECTED".equals(result.llmStatus()))
                 .count();
         int totalCount = productRows.size();
-        double ratio = (double) selectedCount * 100 / totalCount;
+        double ratio = (double) unmatchedOrRejectedCount * 100 / totalCount;
         int summaryRowIndex = productRows.stream()
                 .mapToInt(ProductExcelRow::rowId)
                 .max()
@@ -481,8 +487,26 @@ public class KeywordExcelFillService {
         if (summaryRow == null) {
             summaryRow = sheet.createRow(summaryRowIndex);
         }
-        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX)
-                .setCellValue(String.format(Locale.ROOT, "선택됨 비율: %d/%d (%.2f%%)", selectedCount, totalCount, ratio));
+        clearLegacyOutputCells(summaryRow);
+        summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue("못찾음/거절 비율");
+        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(String.format(
+                Locale.ROOT,
+                "%d/%d (%.2f%%)",
+                unmatchedOrRejectedCount,
+                totalCount,
+                ratio
+        ));
+    }
+
+    private void clearLegacyOutputCells(Row row) {
+        for (int columnIndex = LEGACY_OUTPUT_START_COLUMN_INDEX;
+             columnIndex <= LEGACY_OUTPUT_END_COLUMN_INDEX;
+             columnIndex++) {
+            Cell cell = row.getCell(columnIndex);
+            if (cell != null) {
+                row.removeCell(cell);
+            }
+        }
     }
 
     private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
