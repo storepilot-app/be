@@ -28,8 +28,9 @@ import org.springframework.web.client.RestClientException;
 @Component
 @RequiredArgsConstructor
 public class CategoryMatcherAiClient {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final RestClient.Builder restClientBuilder;
-    private final ObjectMapper objectMapper;
 
     @Value("${storepilot.ai.base-url:http://127.0.0.1:8000}")
     private String aiBaseUrl;
@@ -80,7 +81,7 @@ public class CategoryMatcherAiClient {
         MultipartBodyBuilder body = new MultipartBodyBuilder();
         body.part("userKey", userKey);
         try {
-            body.part("categoryMappings", objectMapper.writeValueAsString(mappings));
+            body.part("categoryMappings", OBJECT_MAPPER.writeValueAsString(mappings));
         } catch (JsonProcessingException error) {
             throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "Failed to serialize category mappings.");
         }
