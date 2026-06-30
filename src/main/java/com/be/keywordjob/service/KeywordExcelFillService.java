@@ -1,5 +1,10 @@
 package com.be.keywordjob.service;
 
+import com.be.categorymatcher.service.CategoryMatcherService;
+import com.be.categorymatcher.dto.CategoryMatchProductRequest;
+import com.be.categorymatcher.dto.CategoryMatchSimilarProduct;
+import com.be.categorymatcher.dto.MyCategoryMatchResult;
+import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
@@ -7,6 +12,7 @@ import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -17,15 +23,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -39,13 +50,36 @@ import org.springframework.web.multipart.MultipartFile;
 public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
+    private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
+    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
+    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
+    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
+    private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
+    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
+    private static final int LEGACY_OUTPUT_START_COLUMN_INDEX = 34; // AI
+    private static final int LEGACY_OUTPUT_END_COLUMN_INDEX = 38; // AM
+    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
+    private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
+    private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
+    private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
+    private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final String KEYWORD_HEADER = "\uD0A4\uC6CC\uB4DC";
-    private static final String MY_CATEGORY_HEADER = "\uB9C8\uC774\uCE74\uD14C";
-    private static final String IMAGE_URL_COLUMN = "\uBAA9\uB85D\uC774\uBBF8\uC9C01";
-    private static final String PRODUCT_CODE_COLUMN = "\uC0C1\uD488\uCF54\uB4DC";
-    private static final String PRODUCT_NUMBER_COLUMN = "\uC81C\uD488\uBC88\uD638";
+    private static final int CATEGORY_BATCH_SIZE = 30;
+    private static final String KEYWORD_HEADER = "키워드";
+    private static final String MY_CATEGORY_HEADER = "마이카테";
+    private static final String NAVER_CATEGORY_HEADER = "네이버카테";
+    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
+    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
+    private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
+    private static final String LLM_STATUS_HEADER = "LLM상태";
+    private static final String IMAGE_URL_COLUMN = "목록이미지1";
+    private static final String PRODUCT_CODE_COLUMN = "상품코드";
+    private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
+    private static final String NO_CATEGORY_MATCH = "매칭없음";
+    private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
+    private static final String NO_SELECTED_CATEGORY = "없음";
 
+    private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -59,25 +93,80 @@ public class KeywordExcelFillService {
             MultipartFile file,
             String productNameColumn,
             String categoryColumn,
-            Integer keywordCount
+            Integer keywordCount,
+            String userKey
     ) {
         keywordJobUploadService.validate(file, productNameColumn, keywordCount);
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream());
+        try (InputStream inputStream = file.getInputStream()) {
+            return fillAndDownload(
+                    inputStream,
+                    file.getOriginalFilename(),
+                    productNameColumn,
+                    categoryColumn,
+                    keywordCount,
+                    userKey,
+                    CategoryJobProgressListener.NO_OP
+            );
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
+        }
+    }
+
+    public ExcelDownloadResult fillAndDownload(
+            Path filePath,
+            String originalFilename,
+            String productNameColumn,
+            String categoryColumn,
+            Integer keywordCount,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            return fillAndDownload(
+                    inputStream,
+                    originalFilename,
+                    productNameColumn,
+                    categoryColumn,
+                    keywordCount,
+                    userKey,
+                    progressListener
+            );
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
+        }
+    }
+
+    private ExcelDownloadResult fillAndDownload(
+            InputStream inputStream,
+            String originalFilename,
+            String productNameColumn,
+            String categoryColumn,
+            Integer keywordCount,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        try (Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
+            LlmStatusCellStyles llmStatusCellStyles = createLlmStatusCellStyles(workbook);
 
             int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
+            ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
+            ensureTopNaverCategoryHeaders(headerRow);
+            clearLegacyOutputCells(headerRow);
+            applyTopNaverCategoryColumnWidths(sheet);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
+            List<ProductExcelRow> productRows = new ArrayList<>();
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
@@ -91,21 +180,69 @@ public class KeywordExcelFillService {
                     continue;
                 }
 
-                String myCategory = inferMyCategory(productName, category);
+                productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
+            }
+
+            List<CategoryMatchProductRequest> products = productRows.stream()
+                    .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
+                    .toList();
+            Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
+                    products,
+                    userKey,
+                    progressListener
+            );
+
+            for (ProductExcelRow productRow : productRows) {
+                Row row = productRow.row();
+                String productName = productRow.productName();
+                String category = productRow.category();
+                MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
+                        productRow.rowId(),
+                        MyCategoryMatchResult.noCategoryMatch()
+                );
+                String myCategory = resolveMyCategory(myCategoryResult);
                 List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
+                writeNaverCategory(row, myCategoryResult);
+                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
+                writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
+                writeSelectedCategory(row, myCategoryResult);
+                writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
+                clearLegacyOutputCells(row);
             }
+            writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
 
+            progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
-            String filename = buildDownloadFilename(file.getOriginalFilename());
+            String filename = buildDownloadFilename(originalFilename);
             return new ExcelDownloadResult(filename, outputStream.toByteArray());
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
         }
+    }
+
+    private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
+            List<CategoryMatchProductRequest> products,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
+        int totalCount = products.size();
+        progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
+
+        for (int start = 0; start < totalCount; start += CATEGORY_BATCH_SIZE) {
+            int end = Math.min(start + CATEGORY_BATCH_SIZE, totalCount);
+            results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
+            progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
+        }
+        return results;
+    }
+
+    private record ProductExcelRow(int rowId, Row row, String productName, String category) {
     }
 
     public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
@@ -299,6 +436,28 @@ public class KeywordExcelFillService {
         cell.setCellValue(value);
     }
 
+    private void ensureTopNaverCategoryHeaders(Row headerRow) {
+        ensureHeader(headerRow, TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_HEADER);
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            ensureHeader(
+                    headerRow,
+                    TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index,
+                    TOP_NAVER_CATEGORIES_HEADER_PREFIX + (index + 1)
+            );
+        }
+        ensureHeader(headerRow, SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_HEADER);
+        ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
+    }
+
+    private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
+        sheet.setColumnWidth(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+        }
+        sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
+    }
+
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
         Cell cell = row.getCell(columnIndex);
         if (cell == null) {
@@ -317,13 +476,174 @@ public class KeywordExcelFillService {
         }
 
         String text = productName.toLowerCase(Locale.ROOT);
-        if (text.contains("\uC5FD\uC11C")) return "\uC5FD\uC11C";
-        if (text.contains("\uB2E4\uC774\uC5B4\uB9AC")) return "\uB2E4\uC774\uC5B4\uB9AC";
-        if (text.contains("\uAC00\uACC4\uBD80")) return "\uAC00\uACC4\uBD80";
-        if (text.contains("\uBC14\uC778\uB354")) return "\uBC14\uC778\uB354";
-        if (text.contains("\uD0A4\uBCF4\uB4DC")) return "\uD0A4\uBCF4\uB4DC";
-        if (text.contains("\uC2A4\uD2F0\uCEE4") || text.contains("\uC52C")) return "\uC2A4\uD2F0\uCEE4";
-        return "\uAE30\uD0C0";
+        if (text.contains("엽서")) return "엽서";
+        if (text.contains("다이어리")) return "다이어리";
+        if (text.contains("가계부")) return "가계부";
+        if (text.contains("바인더")) return "바인더";
+        if (text.contains("키보드")) return "키보드";
+        if (text.contains("스티커") || text.contains("씰")) return "스티커";
+        return "기타";
+    }
+
+    private String resolveMyCategory(MyCategoryMatchResult result) {
+        if (result.status() == MyCategoryMatchStatus.MATCHED) {
+            return result.myCategoryCode();
+        }
+        if (result.status() == MyCategoryMatchStatus.NO_MY_CATEGORY_MAPPING) {
+            return NO_MY_CATEGORY_MAPPING;
+        }
+        return NO_CATEGORY_MATCH;
+    }
+
+    private void writeNaverCategory(Row row, MyCategoryMatchResult result) {
+        String naverCategory = result.naverCategory() == null || result.naverCategory().isBlank()
+                ? NO_CATEGORY_MATCH
+                : result.naverCategory();
+        row.createCell(NAVER_CATEGORY_COLUMN_INDEX).setCellValue(naverCategory);
+    }
+
+    private void writeSimilarProducts(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedCategoryStyle
+    ) {
+        List<CategoryMatchSimilarProduct> similarProducts = result.similarProducts();
+        for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
+            Cell cell = row.createCell(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index);
+            if (similarProducts.isEmpty() && index == 0) {
+                cell.setCellValue("유사상품 없음");
+                continue;
+            }
+            if (index >= similarProducts.size()) {
+                cell.setCellValue("");
+                continue;
+            }
+            CategoryMatchSimilarProduct similarProduct = similarProducts.get(index);
+            cell.setCellValue(formatSimilarProduct(similarProduct));
+            if ("SELECTED".equals(result.llmStatus())
+                    && result.naverCategory() != null
+                    && result.naverCategory().equals(similarProduct.fullPath())) {
+                cell.setCellStyle(selectedCategoryStyle);
+            }
+        }
+    }
+
+    private void writeSelectedCategory(Row row, MyCategoryMatchResult result) {
+        String value = result.naverCategory() == null || result.naverCategory().isBlank()
+                ? NO_SELECTED_CATEGORY
+                : result.naverCategory();
+        row.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
+    }
+
+    private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
+        Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
+        cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
+        if ("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus())) {
+            cell.setCellStyle(styles.selected());
+        } else if ("REJECTED".equals(result.llmStatus())) {
+            cell.setCellStyle(styles.rejected());
+        }
+    }
+
+    private void writeUnmatchedOrRejectedRatio(
+            Sheet sheet,
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults
+    ) {
+        if (productRows.isEmpty()) {
+            return;
+        }
+
+        long unmatchedOrRejectedCount = productRows.stream()
+                .map(productRow -> myCategoryResults.get(productRow.rowId()))
+                .filter(result -> result == null
+                        || result.status() == MyCategoryMatchStatus.NO_CATEGORY_MATCH
+                        || "REJECTED".equals(result.llmStatus()))
+                .count();
+        int totalCount = productRows.size();
+        double ratio = (double) unmatchedOrRejectedCount * 100 / totalCount;
+        int summaryRowIndex = productRows.stream()
+                .mapToInt(ProductExcelRow::rowId)
+                .max()
+                .orElse(sheet.getLastRowNum()) + 1;
+        Row summaryRow = sheet.getRow(summaryRowIndex);
+        if (summaryRow == null) {
+            summaryRow = sheet.createRow(summaryRowIndex);
+        }
+        clearLegacyOutputCells(summaryRow);
+        summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue("못찾음/거절 비율");
+        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(String.format(
+                Locale.ROOT,
+                "%d/%d (%.2f%%)",
+                unmatchedOrRejectedCount,
+                totalCount,
+                ratio
+        ));
+    }
+
+    private void clearLegacyOutputCells(Row row) {
+        for (int columnIndex = LEGACY_OUTPUT_START_COLUMN_INDEX;
+             columnIndex <= LEGACY_OUTPUT_END_COLUMN_INDEX;
+             columnIndex++) {
+            Cell cell = row.getCell(columnIndex);
+            if (cell != null) {
+                row.removeCell(cell);
+            }
+        }
+    }
+
+    private String formatLlmStatus(String llmStatus, String llmStatusDetail) {
+        String status;
+        if (llmStatus == null || llmStatus.isBlank()) {
+            status = "호출안함";
+        } else {
+            status = switch (llmStatus) {
+                case "SELECTED" -> "선택됨";
+                case "REJECTED" -> "거절됨";
+                case "FAILED" -> "호출실패";
+                case "SKIPPED" -> "호출안함";
+                case "AUTO_SELECTED" -> "자동선택";
+                case "NO_SIMILAR_PRODUCTS" -> "유사상품 없음";
+                default -> llmStatus;
+            };
+        }
+
+        if (llmStatusDetail == null || llmStatusDetail.isBlank()) {
+            return status;
+        }
+        return status + ": " + abbreviate(llmStatusDetail, LLM_STATUS_DETAIL_MAX_LENGTH);
+    }
+
+    private String abbreviate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3) + "...";
+    }
+
+    private LlmStatusCellStyles createLlmStatusCellStyles(Workbook workbook) {
+        CellStyle selected = workbook.createCellStyle();
+        selected.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+        selected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle rejected = workbook.createCellStyle();
+        rejected.setFillForegroundColor(IndexedColors.ROSE.getIndex());
+        rejected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        return new LlmStatusCellStyles(selected, rejected);
+    }
+
+    private record LlmStatusCellStyles(CellStyle selected, CellStyle rejected) {
+    }
+
+    private String formatSimilarProduct(CategoryMatchSimilarProduct product) {
+        return String.format(
+                Locale.ROOT,
+                "%s | %s (%.4f)",
+                product.productName(),
+                product.fullPath(),
+                product.similarity()
+        );
     }
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {
@@ -331,14 +651,14 @@ public class KeywordExcelFillService {
         List<String> tokens = tokenize(productName);
 
         addKeyword(keywords, myCategory);
-        addKeyword(keywords, myCategory + "\uCD94\uCC9C");
-        addKeyword(keywords, myCategory + "\uC120\uBB3C");
-        addKeyword(keywords, myCategory + "\uBB38\uAD6C");
-        addKeyword(keywords, "\uAC10\uC131" + myCategory);
-        addKeyword(keywords, "\uADC0\uC5EC\uC6B4" + myCategory);
-        addKeyword(keywords, "\uB514\uC790\uC778" + myCategory);
-        addKeyword(keywords, "\uD559\uC0DD" + myCategory);
-        addKeyword(keywords, "\uC0AC\uBB34\uC6A9" + myCategory);
+        addKeyword(keywords, myCategory + "추천");
+        addKeyword(keywords, myCategory + "선물");
+        addKeyword(keywords, myCategory + "문구");
+        addKeyword(keywords, "감성" + myCategory);
+        addKeyword(keywords, "귀여운" + myCategory);
+        addKeyword(keywords, "디자인" + myCategory);
+        addKeyword(keywords, "학생" + myCategory);
+        addKeyword(keywords, "사무용" + myCategory);
 
         for (String token : tokens) {
             addKeyword(keywords, token + myCategory);
@@ -364,7 +684,7 @@ public class KeywordExcelFillService {
         String[] rawTokens = text.split("[\\s_/(),\\[\\]-]+");
         List<String> tokens = new ArrayList<>();
         for (String rawToken : rawTokens) {
-            String token = rawToken.replaceAll("[^\uAC00-\uD7A3A-Za-z0-9]", "").trim();
+            String token = rawToken.replaceAll("[^\\p{IsHangul}A-Za-z0-9]", "").trim();
             if (token.length() >= 2 && !tokens.contains(token)) {
                 tokens.add(token);
             }
