@@ -1,6 +1,7 @@
 package com.be.trainingproduct.service;
 
 import com.be.categorymatcher.client.CategoryMatcherAiClient;
+import com.be.categorymatcher.dto.CategoryMatchMappingItem;
 import com.be.categorymatcher.dto.ProductFeedbackAiRequest;
 import com.be.categorymatcher.dto.ProductFeedbackAiResponse;
 import com.be.categorymatcher.dto.ProductIndexRebuildResponse;
@@ -33,8 +34,24 @@ public class TrainingProductService {
     public ProductIndexRebuildResponse rebuildIndex(String userKey, List<MultipartFile> files) {
         String normalizedUserKey = normalizeUserKey(userKey);
         validateFiles(files);
-        activeMappingVersion(normalizedUserKey);
-        return categoryMatcherAiClient.rebuildProductIndex(normalizedUserKey, files);
+        MyCategoryMappingVersion version = activeMappingVersion(normalizedUserKey);
+        List<CategoryMatchMappingItem> mappings = myCategoryMappingRepository
+                .findByUserKeyAndVersionId(normalizedUserKey, version.getId())
+                .stream()
+                .filter(mapping -> mapping.getNaverCategoryId() != null)
+                .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
+                .filter(mapping -> mapping.getNaverCategoryFullPath() != null && !mapping.getNaverCategoryFullPath().isBlank())
+                .map(mapping -> new CategoryMatchMappingItem(
+                        mapping.getMyCategoryCode(),
+                        mapping.getNaverCategoryId(),
+                        mapping.getNaverCategoryCode(),
+                        mapping.getNaverCategoryFullPath()
+                ))
+                .toList();
+        if (mappings.isEmpty()) {
+            throw invalid("Active my-category mappings contain no resolved Naver categories.");
+        }
+        return categoryMatcherAiClient.rebuildProductIndex(normalizedUserKey, files, mappings);
     }
 
     @Transactional
@@ -63,7 +80,13 @@ public class TrainingProductService {
                 Instant.now()
         ));
         ProductFeedbackAiResponse aiResponse = categoryMatcherAiClient.addProductFeedback(
-                new ProductFeedbackAiRequest(userKey, productName, myCategoryCode)
+                new ProductFeedbackAiRequest(
+                        userKey,
+                        productName,
+                        mapping.getNaverCategoryId(),
+                        mapping.getNaverCategoryCode(),
+                        mapping.getNaverCategoryFullPath()
+                )
         );
         return new ProductCategoryFeedbackResponse(
                 feedback.getId(),

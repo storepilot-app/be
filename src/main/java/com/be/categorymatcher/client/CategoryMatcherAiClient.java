@@ -12,6 +12,8 @@ import com.be.categorymatcher.dto.ProductIndexRebuildResponse;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.navercategory.domain.NaverCategory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class CategoryMatcherAiClient {
     private final RestClient.Builder restClientBuilder;
+    private final ObjectMapper objectMapper;
 
     @Value("${storepilot.ai.base-url:http://127.0.0.1:8000}")
     private String aiBaseUrl;
@@ -55,14 +58,12 @@ public class CategoryMatcherAiClient {
 
     public Optional<CategoryMatchPredictResponse> predict(
             Long versionId,
-            String userKey,
-            List<CategoryMatchProductRequest> products,
-            List<CategoryMatchMappingItem> mappings
+            List<CategoryMatchProductRequest> products
     ) {
         try {
             CategoryMatchPredictResponse response = restClient().post()
                     .uri("/ai/categories/predict")
-                    .body(new CategoryMatchPredictRequest(versionId, userKey, products, mappings))
+                    .body(new CategoryMatchPredictRequest(versionId, products))
                     .retrieve()
                     .body(CategoryMatchPredictResponse.class);
             return Optional.ofNullable(response);
@@ -71,9 +72,18 @@ public class CategoryMatcherAiClient {
         }
     }
 
-    public ProductIndexRebuildResponse rebuildProductIndex(String userKey, List<MultipartFile> files) {
+    public ProductIndexRebuildResponse rebuildProductIndex(
+            String userKey,
+            List<MultipartFile> files,
+            List<CategoryMatchMappingItem> mappings
+    ) {
         MultipartBodyBuilder body = new MultipartBodyBuilder();
         body.part("userKey", userKey);
+        try {
+            body.part("categoryMappings", objectMapper.writeValueAsString(mappings));
+        } catch (JsonProcessingException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "Failed to serialize category mappings.");
+        }
         files.forEach(file -> body.part("files", file.getResource()));
 
         try {
