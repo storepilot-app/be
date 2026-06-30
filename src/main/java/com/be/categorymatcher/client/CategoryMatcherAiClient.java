@@ -20,7 +20,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -78,20 +79,20 @@ public class CategoryMatcherAiClient {
             List<MultipartFile> files,
             List<CategoryMatchMappingItem> mappings
     ) {
-        MultipartBodyBuilder body = new MultipartBodyBuilder();
-        body.part("userKey", userKey);
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("userKey", userKey);
         try {
-            body.part("categoryMappings", OBJECT_MAPPER.writeValueAsString(mappings));
+            body.add("categoryMappings", OBJECT_MAPPER.writeValueAsString(mappings));
         } catch (JsonProcessingException error) {
             throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "Failed to serialize category mappings.");
         }
-        files.forEach(file -> body.part("files", file.getResource()));
+        files.forEach(file -> body.add("files", file.getResource()));
 
         try {
             ProductIndexRebuildResponse response = restClient().post()
                     .uri("/ai/categories/product-index/rebuild")
                     .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body.build())
+                    .body(body)
                     .retrieve()
                     .body(ProductIndexRebuildResponse.class);
             if (response == null) {
