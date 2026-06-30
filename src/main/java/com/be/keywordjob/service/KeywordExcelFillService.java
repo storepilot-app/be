@@ -12,6 +12,7 @@ import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -22,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +64,7 @@ public class KeywordExcelFillService {
     private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
     private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
+    private static final int CATEGORY_BATCH_SIZE = 30;
     private static final String KEYWORD_HEADER = "키워드";
     private static final String MY_CATEGORY_HEADER = "마이카테";
     private static final String NAVER_CATEGORY_HEADER = "네이버카테";
@@ -95,7 +98,55 @@ public class KeywordExcelFillService {
     ) {
         keywordJobUploadService.validate(file, productNameColumn, keywordCount);
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream());
+        try (InputStream inputStream = file.getInputStream()) {
+            return fillAndDownload(
+                    inputStream,
+                    file.getOriginalFilename(),
+                    productNameColumn,
+                    categoryColumn,
+                    keywordCount,
+                    userKey,
+                    CategoryJobProgressListener.NO_OP
+            );
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
+        }
+    }
+
+    public ExcelDownloadResult fillAndDownload(
+            Path filePath,
+            String originalFilename,
+            String productNameColumn,
+            String categoryColumn,
+            Integer keywordCount,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            return fillAndDownload(
+                    inputStream,
+                    originalFilename,
+                    productNameColumn,
+                    categoryColumn,
+                    keywordCount,
+                    userKey,
+                    progressListener
+            );
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
+        }
+    }
+
+    private ExcelDownloadResult fillAndDownload(
+            InputStream inputStream,
+            String originalFilename,
+            String productNameColumn,
+            String categoryColumn,
+            Integer keywordCount,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        try (Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
@@ -135,7 +186,11 @@ public class KeywordExcelFillService {
             List<CategoryMatchProductRequest> products = productRows.stream()
                     .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
                     .toList();
-            Map<Integer, MyCategoryMatchResult> myCategoryResults = categoryMatcherService.findMyCategoryCodes(products, userKey);
+            Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
+                    products,
+                    userKey,
+                    progressListener
+            );
 
             for (ProductExcelRow productRow : productRows) {
                 Row row = productRow.row();
@@ -159,14 +214,32 @@ public class KeywordExcelFillService {
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
 
+            progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
-            String filename = buildDownloadFilename(file.getOriginalFilename());
+            String filename = buildDownloadFilename(originalFilename);
             return new ExcelDownloadResult(filename, outputStream.toByteArray());
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
         }
+    }
+
+    private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
+            List<CategoryMatchProductRequest> products,
+            String userKey,
+            CategoryJobProgressListener progressListener
+    ) {
+        Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
+        int totalCount = products.size();
+        progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
+
+        for (int start = 0; start < totalCount; start += CATEGORY_BATCH_SIZE) {
+            int end = Math.min(start + CATEGORY_BATCH_SIZE, totalCount);
+            results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
+            progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
+        }
+        return results;
     }
 
     private record ProductExcelRow(int rowId, Row row, String productName, String category) {
