@@ -47,4 +47,15 @@ class KeywordCombinationTemplateTest {
         assertEquals(1, result.stream().filter("키보드"::equals).count());
         assertTrue(result.stream().noneMatch(keyword -> keyword.length() > 20));
     }
+
+    @Test
+    void placesRepeatedExpressionsBeforeGeneratedCombinations() {
+        List<String> result = template.generate(
+                List.of("로지텍", "블루투스", "키보드"),
+                List.of("무선키보드"),
+                List.of("블루투스키보드", "키보드")
+        );
+
+        assertEquals(List.of("무선키보드", "블루투스키보드", "키보드"), result.subList(0, 3));
+    }
 }

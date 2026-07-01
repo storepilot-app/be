@@ -13,6 +13,8 @@ import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
 import com.be.keywordjob.keyword.KeywordCombinationTemplate;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
+import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
+import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -87,6 +89,7 @@ public class KeywordExcelFillService {
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
     private final ProductNameTokenExtractor productNameTokenExtractor;
+    private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -197,6 +200,16 @@ public class KeywordExcelFillService {
                     userKey,
                     progressListener
             );
+            Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
+            Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
+                    productRows.stream()
+                            .map(productRow -> new ProductSource(
+                                    productRow.rowId(),
+                                    productRow.productName(),
+                                    keywordCategories.get(productRow.rowId())
+                            ))
+                            .toList()
+            );
 
             for (ProductExcelRow productRow : productRows) {
                 Row row = productRow.row();
@@ -207,13 +220,11 @@ public class KeywordExcelFillService {
                         MyCategoryMatchResult.noCategoryMatch()
                 );
                 String myCategory = resolveMyCategory(myCategoryResult);
-                String keywordCategory = myCategoryResult.naverCategory() == null
-                        || myCategoryResult.naverCategory().isBlank()
-                        ? category
-                        : myCategoryResult.naverCategory();
+                String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
                 List<String> keywords = generateKeywords(
                         productName,
                         keywordCategory,
+                        repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
                         resolvedKeywordCount
                 );
 
@@ -257,6 +268,22 @@ public class KeywordExcelFillService {
     }
 
     private record ProductExcelRow(int rowId, Row row, String productName, String category) {
+    }
+
+    private Map<Integer, String> resolveKeywordCategories(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> categoryResults
+    ) {
+        Map<Integer, String> categories = new HashMap<>();
+        for (ProductExcelRow productRow : productRows) {
+            MyCategoryMatchResult result = categoryResults.get(productRow.rowId());
+            String category = result == null ? null : result.naverCategory();
+            categories.put(
+                    productRow.rowId(),
+                    category == null || category.isBlank() ? productRow.category() : category
+            );
+        }
+        return categories;
     }
 
     public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
@@ -660,10 +687,16 @@ public class KeywordExcelFillService {
         );
     }
 
-    private List<String> generateKeywords(String productName, String category, int keywordCount) {
+    private List<String> generateKeywords(
+            String productName,
+            String category,
+            List<String> repeatedPhrases,
+            int keywordCount
+    ) {
         List<String> candidates = keywordCombinationTemplate.generate(
                 productNameTokenExtractor.extract(productName),
-                categoryTokenExtractor.extract(category)
+                categoryTokenExtractor.extract(category),
+                repeatedPhrases
         );
         return candidates.stream()
                 .limit(keywordCount)

@@ -12,11 +12,21 @@ public class KeywordCombinationTemplate {
     private static final int MAX_KEYWORD_LENGTH = 20;
 
     public List<String> generate(List<String> productTokens, List<String> categoryTokens) {
+        return generate(productTokens, categoryTokens, List.of());
+    }
+
+    public List<String> generate(
+            List<String> productTokens,
+            List<String> categoryTokens,
+            List<String> repeatedPhrases
+    ) {
         Map<String, String> candidates = new LinkedHashMap<>();
         List<String> safeProductTokens = productTokens == null ? List.of() : productTokens;
         List<String> safeCategoryTokens = categoryTokens == null ? List.of() : categoryTokens;
+        List<String> safeRepeatedPhrases = repeatedPhrases == null ? List.of() : repeatedPhrases;
 
         safeCategoryTokens.forEach(token -> add(candidates, token));
+        safeRepeatedPhrases.forEach(phrase -> add(candidates, phrase));
 
         String primaryCategory = safeCategoryTokens.isEmpty() ? "" : safeCategoryTokens.get(0);
         if (!primaryCategory.isBlank()) {
