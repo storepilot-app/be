@@ -11,6 +11,7 @@ import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
+import com.be.keywordjob.keyword.KeywordCombinationTemplate;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,6 +85,7 @@ public class KeywordExcelFillService {
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
     private final CategoryTokenExtractor categoryTokenExtractor;
+    private final KeywordCombinationTemplate keywordCombinationTemplate;
     private final ProductNameTokenExtractor productNameTokenExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -212,7 +214,6 @@ public class KeywordExcelFillService {
                 List<String> keywords = generateKeywords(
                         productName,
                         keywordCategory,
-                        myCategory,
                         resolvedKeywordCount
                 );
 
@@ -659,60 +660,14 @@ public class KeywordExcelFillService {
         );
     }
 
-    private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {
-        Set<String> keywords = new LinkedHashSet<>();
-        List<String> tokens = productNameTokenExtractor.extract(productName);
-
-        addKeyword(keywords, myCategory);
-        addKeyword(keywords, myCategory + "추천");
-        addKeyword(keywords, myCategory + "선물");
-        addKeyword(keywords, myCategory + "문구");
-        addKeyword(keywords, "감성" + myCategory);
-        addKeyword(keywords, "귀여운" + myCategory);
-        addKeyword(keywords, "디자인" + myCategory);
-        addKeyword(keywords, "학생" + myCategory);
-        addKeyword(keywords, "사무용" + myCategory);
-
-        for (String token : tokens) {
-            addKeyword(keywords, token + myCategory);
-            addKeyword(keywords, token);
-        }
-
-        if (category != null && !category.isBlank()) {
-            for (String token : categoryTokenExtractor.extract(category)) {
-                addKeyword(keywords, token);
-            }
-        }
-
-        return keywords.stream()
+    private List<String> generateKeywords(String productName, String category, int keywordCount) {
+        List<String> candidates = keywordCombinationTemplate.generate(
+                productNameTokenExtractor.extract(productName),
+                categoryTokenExtractor.extract(category)
+        );
+        return candidates.stream()
                 .limit(keywordCount)
                 .toList();
-    }
-
-    private List<String> tokenize(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-
-        String[] rawTokens = text.split("[\\s_/(),\\[\\]-]+");
-        List<String> tokens = new ArrayList<>();
-        for (String rawToken : rawTokens) {
-            String token = rawToken.replaceAll("[^\\p{IsHangul}A-Za-z0-9]", "").trim();
-            if (token.length() >= 2 && !tokens.contains(token)) {
-                tokens.add(token);
-            }
-        }
-        return tokens;
-    }
-
-    private void addKeyword(Set<String> keywords, String keyword) {
-        if (keyword == null) {
-            return;
-        }
-        String cleaned = keyword.replaceAll("\\s+", "").trim();
-        if (cleaned.length() >= 2 && cleaned.length() <= 20) {
-            keywords.add(cleaned);
-        }
     }
 
     private Path resolveImageDirectory(String imageOutputDir) {
