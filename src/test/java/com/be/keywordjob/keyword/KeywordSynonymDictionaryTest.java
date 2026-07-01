@@ -30,6 +30,20 @@ class KeywordSynonymDictionaryTest {
     }
 
     @Test
+    void keepsTheSourceTermForDetailedReasons() {
+        KeywordSynonymDictionary dictionary = new KeywordSynonymDictionary(List.of(
+                "스마트폰|휴대폰"
+        ));
+
+        KeywordSynonymDictionary.SynonymExpansion expansion = dictionary
+                .findExpansions(List.of("스마트폰케이스"))
+                .getFirst();
+
+        assertEquals("스마트폰케이스", expansion.sourceTerm());
+        assertEquals("휴대폰케이스", expansion.keyword());
+    }
+
+    @Test
     void ignoresCommentsBlankLinesAndUnrelatedTerms() {
         KeywordSynonymDictionary dictionary = new KeywordSynonymDictionary(List.of(
                 "# comment",

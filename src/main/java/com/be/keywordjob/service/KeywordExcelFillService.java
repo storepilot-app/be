@@ -10,10 +10,14 @@ import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
+import com.be.keywordjob.excel.KeywordDetailSheetWriter;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
 import com.be.keywordjob.keyword.KeywordCandidateRanker;
+import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
 import com.be.keywordjob.keyword.KeywordCombinationTemplate;
+import com.be.keywordjob.keyword.KeywordDetailEntry;
 import com.be.keywordjob.keyword.KeywordSynonymDictionary;
+import com.be.keywordjob.keyword.KeywordSynonymDictionary.SynonymExpansion;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
@@ -91,6 +95,7 @@ public class KeywordExcelFillService {
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCandidateRanker keywordCandidateRanker;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
+    private final KeywordDetailSheetWriter keywordDetailSheetWriter;
     private final KeywordSynonymDictionary keywordSynonymDictionary;
     private final ProductNameTokenExtractor productNameTokenExtractor;
     private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
@@ -214,6 +219,7 @@ public class KeywordExcelFillService {
                             ))
                             .toList()
             );
+            List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
 
             for (ProductExcelRow productRow : productRows) {
                 Row row = productRow.row();
@@ -225,14 +231,27 @@ public class KeywordExcelFillService {
                 );
                 String myCategory = resolveMyCategory(myCategoryResult);
                 String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
-                List<String> keywords = generateKeywords(
+                List<GeneratedKeyword> keywords = generateKeywords(
                         productName,
                         keywordCategory,
                         repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
                         resolvedKeywordCount
                 );
 
-                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
+                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
+                        .map(keyword -> keyword.score().keyword())
+                        .collect(java.util.stream.Collectors.joining(", ")));
+                for (int index = 0; index < keywords.size(); index++) {
+                    GeneratedKeyword keyword = keywords.get(index);
+                    keywordDetails.add(new KeywordDetailEntry(
+                            productRow.rowId() + 1,
+                            productName,
+                            keywordCategory,
+                            index + 1,
+                            keyword.score(),
+                            keyword.reasons()
+                    ));
+                }
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
@@ -242,6 +261,7 @@ public class KeywordExcelFillService {
                 clearLegacyOutputCells(row);
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            keywordDetailSheetWriter.write(workbook, keywordDetails);
 
             progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
@@ -691,7 +711,7 @@ public class KeywordExcelFillService {
         );
     }
 
-    private List<String> generateKeywords(
+    private List<GeneratedKeyword> generateKeywords(
             String productName,
             String category,
             List<String> repeatedPhrases,
@@ -703,7 +723,10 @@ public class KeywordExcelFillService {
         synonymSources.addAll(productTokens);
         synonymSources.addAll(categoryTokens);
         synonymSources.addAll(repeatedPhrases);
-        List<String> synonyms = keywordSynonymDictionary.findSynonyms(synonymSources);
+        List<SynonymExpansion> synonymExpansions = keywordSynonymDictionary.findExpansions(synonymSources);
+        List<String> synonyms = synonymExpansions.stream()
+                .map(SynonymExpansion::keyword)
+                .toList();
 
         List<String> candidates = keywordCombinationTemplate.generate(
                 productTokens,
@@ -718,9 +741,114 @@ public class KeywordExcelFillService {
                         repeatedPhrases,
                         synonyms
                 ).stream()
-                .map(KeywordCandidateRanker.ScoredKeyword::keyword)
                 .limit(keywordCount)
+                .map(score -> new GeneratedKeyword(
+                        score,
+                        resolveKeywordReasons(
+                                score.keyword(),
+                                productTokens,
+                                categoryTokens,
+                                repeatedPhrases,
+                                synonymExpansions
+                        )
+                ))
                 .toList();
+    }
+
+    private List<String> resolveKeywordReasons(
+            String keyword,
+            List<String> productTokens,
+            List<String> categoryTokens,
+            List<String> repeatedPhrases,
+            List<SynonymExpansion> synonymExpansions
+    ) {
+        Set<String> reasons = new LinkedHashSet<>();
+        if (containsKeyword(categoryTokens, keyword)) {
+            reasons.add("카테고리 핵심어");
+        }
+        if (containsKeyword(repeatedPhrases, keyword)) {
+            reasons.add("유사상품 반복 표현");
+        }
+        synonymExpansions.stream()
+                .filter(expansion -> sameKeyword(expansion.keyword(), keyword))
+                .map(expansion -> "동의어 치환: " + expansion.sourceTerm() + " → " + expansion.keyword())
+                .forEach(reasons::add);
+        if (containsKeyword(productTokens, keyword)) {
+            reasons.add("상품명 토큰");
+        }
+        if (isProductTokenCombination(keyword, productTokens)) {
+            reasons.add("상품명 토큰 조합");
+        }
+        if (isProductCategoryCombination(keyword, productTokens, categoryTokens)) {
+            reasons.add("상품명 + 카테고리 조합");
+        }
+        if (reasons.isEmpty()) {
+            reasons.add("조합 템플릿");
+        }
+        return List.copyOf(reasons);
+    }
+
+    private boolean containsKeyword(List<String> values, String keyword) {
+        return values.stream().anyMatch(value -> sameKeyword(value, keyword));
+    }
+
+    private boolean isProductTokenCombination(String keyword, List<String> productTokens) {
+        if (productTokens.size() >= 2 && sameKeyword(String.join("", productTokens), keyword)) {
+            return true;
+        }
+        for (int index = 0; index + 1 < productTokens.size(); index++) {
+            if (sameKeyword(productTokens.get(index) + productTokens.get(index + 1), keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isProductCategoryCombination(
+            String keyword,
+            List<String> productTokens,
+            List<String> categoryTokens
+    ) {
+        if (categoryTokens.isEmpty()) {
+            return false;
+        }
+        String primaryCategory = categoryTokens.getFirst();
+        for (int index = 0; index < productTokens.size(); index++) {
+            if (sameKeyword(combineWithCategory(List.of(productTokens.get(index)), primaryCategory), keyword)) {
+                return true;
+            }
+            if (index + 1 < productTokens.size()
+                    && sameKeyword(
+                    combineWithCategory(productTokens.subList(index, index + 2), primaryCategory),
+                    keyword
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String combineWithCategory(List<String> tokens, String category) {
+        StringBuilder prefix = new StringBuilder();
+        String normalizedCategory = normalizeKeyword(category);
+        for (String token : tokens) {
+            String normalizedToken = normalizeKeyword(token);
+            if (!normalizedCategory.contains(normalizedToken) && !normalizedToken.contains(normalizedCategory)) {
+                prefix.append(token);
+            }
+        }
+        return prefix.isEmpty() ? category : prefix + category;
+    }
+
+    private boolean sameKeyword(String first, String second) {
+        return normalizeKeyword(first).equals(normalizeKeyword(second));
+    }
+
+    private String normalizeKeyword(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
     }
 
     private Path resolveImageDirectory(String imageOutputDir) {

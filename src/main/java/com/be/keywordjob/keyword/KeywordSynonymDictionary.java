@@ -27,11 +27,17 @@ public class KeywordSynonymDictionary {
     }
 
     public List<String> findSynonyms(List<String> sourceTerms) {
+        return findExpansions(sourceTerms).stream()
+                .map(SynonymExpansion::keyword)
+                .toList();
+    }
+
+    public List<SynonymExpansion> findExpansions(List<String> sourceTerms) {
         if (sourceTerms == null || sourceTerms.isEmpty()) {
             return List.of();
         }
 
-        Map<String, String> candidates = new LinkedHashMap<>();
+        Map<String, SynonymExpansion> candidates = new LinkedHashMap<>();
         for (String sourceTerm : sourceTerms) {
             if (sourceTerm == null || sourceTerm.isBlank()) {
                 continue;
@@ -44,7 +50,10 @@ public class KeywordSynonymDictionary {
                 for (String synonym : synonyms) {
                     String candidate = replaceIgnoreCase(sourceTerm, dictionaryTerm, synonym);
                     if (!normalize(candidate).equals(normalizedSource)) {
-                        candidates.putIfAbsent(normalize(candidate), candidate);
+                        candidates.putIfAbsent(
+                                normalize(candidate),
+                                new SynonymExpansion(sourceTerm, candidate)
+                        );
                     }
                 }
             });
@@ -106,5 +115,8 @@ public class KeywordSynonymDictionary {
 
     private String normalize(String value) {
         return value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    public record SynonymExpansion(String sourceTerm, String keyword) {
     }
 }
