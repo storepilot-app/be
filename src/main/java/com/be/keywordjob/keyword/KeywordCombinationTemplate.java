@@ -12,7 +12,7 @@ public class KeywordCombinationTemplate {
     private static final int MAX_KEYWORD_LENGTH = 20;
 
     public List<String> generate(List<String> productTokens, List<String> categoryTokens) {
-        return generate(productTokens, categoryTokens, List.of());
+        return generate(productTokens, categoryTokens, List.of(), List.of());
     }
 
     public List<String> generate(
@@ -20,13 +20,24 @@ public class KeywordCombinationTemplate {
             List<String> categoryTokens,
             List<String> repeatedPhrases
     ) {
+        return generate(productTokens, categoryTokens, repeatedPhrases, List.of());
+    }
+
+    public List<String> generate(
+            List<String> productTokens,
+            List<String> categoryTokens,
+            List<String> repeatedPhrases,
+            List<String> synonyms
+    ) {
         Map<String, String> candidates = new LinkedHashMap<>();
         List<String> safeProductTokens = productTokens == null ? List.of() : productTokens;
         List<String> safeCategoryTokens = categoryTokens == null ? List.of() : categoryTokens;
         List<String> safeRepeatedPhrases = repeatedPhrases == null ? List.of() : repeatedPhrases;
+        List<String> safeSynonyms = synonyms == null ? List.of() : synonyms;
 
         safeCategoryTokens.forEach(token -> add(candidates, token));
         safeRepeatedPhrases.forEach(phrase -> add(candidates, phrase));
+        safeSynonyms.forEach(synonym -> add(candidates, synonym));
 
         String primaryCategory = safeCategoryTokens.isEmpty() ? "" : safeCategoryTokens.get(0);
         if (!primaryCategory.isBlank()) {

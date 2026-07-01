@@ -1,0 +1,12 @@
+# Put equivalent search expressions on the same line, separated by |.
+# Matching is case-insensitive and also replaces terms inside compound words.
+스마트폰|휴대폰|핸드폰
+노트북|랩탑
+운동화|스니커즈
+백팩|배낭
+반려견|강아지
+반려묘|고양이
+블루투스|Bluetooth
+와이파이|WiFi
+USB메모리|이동식메모리
+프라모델|조립모형

@@ -58,4 +58,19 @@ class KeywordCombinationTemplateTest {
 
         assertEquals(List.of("무선키보드", "블루투스키보드", "키보드"), result.subList(0, 3));
     }
+
+    @Test
+    void includesSynonymsBeforeGeneratedCombinations() {
+        List<String> result = template.generate(
+                List.of("스마트폰", "케이스"),
+                List.of("휴대폰케이스"),
+                List.of(),
+                List.of("핸드폰", "핸드폰케이스")
+        );
+
+        assertEquals(
+                List.of("휴대폰케이스", "핸드폰", "핸드폰케이스"),
+                result.subList(0, 3)
+        );
+    }
 }

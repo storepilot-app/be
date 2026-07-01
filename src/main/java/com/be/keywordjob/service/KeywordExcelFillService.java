@@ -12,6 +12,7 @@ import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
 import com.be.keywordjob.keyword.KeywordCombinationTemplate;
+import com.be.keywordjob.keyword.KeywordSynonymDictionary;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
@@ -88,6 +89,7 @@ public class KeywordExcelFillService {
     private final KeywordJobUploadService keywordJobUploadService;
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
+    private final KeywordSynonymDictionary keywordSynonymDictionary;
     private final ProductNameTokenExtractor productNameTokenExtractor;
     private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -693,10 +695,18 @@ public class KeywordExcelFillService {
             List<String> repeatedPhrases,
             int keywordCount
     ) {
+        List<String> productTokens = productNameTokenExtractor.extract(productName);
+        List<String> categoryTokens = categoryTokenExtractor.extract(category);
+        List<String> synonymSources = new ArrayList<>();
+        synonymSources.addAll(productTokens);
+        synonymSources.addAll(categoryTokens);
+        synonymSources.addAll(repeatedPhrases);
+
         List<String> candidates = keywordCombinationTemplate.generate(
-                productNameTokenExtractor.extract(productName),
-                categoryTokenExtractor.extract(category),
-                repeatedPhrases
+                productTokens,
+                categoryTokens,
+                repeatedPhrases,
+                keywordSynonymDictionary.findSynonyms(synonymSources)
         );
         return candidates.stream()
                 .limit(keywordCount)
