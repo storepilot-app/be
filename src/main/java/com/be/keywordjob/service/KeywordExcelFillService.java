@@ -11,6 +11,7 @@ import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
+import com.be.keywordjob.keyword.KeywordCandidateRanker;
 import com.be.keywordjob.keyword.KeywordCombinationTemplate;
 import com.be.keywordjob.keyword.KeywordSynonymDictionary;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
@@ -88,6 +89,7 @@ public class KeywordExcelFillService {
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
     private final CategoryTokenExtractor categoryTokenExtractor;
+    private final KeywordCandidateRanker keywordCandidateRanker;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
     private final KeywordSynonymDictionary keywordSynonymDictionary;
     private final ProductNameTokenExtractor productNameTokenExtractor;
@@ -701,14 +703,22 @@ public class KeywordExcelFillService {
         synonymSources.addAll(productTokens);
         synonymSources.addAll(categoryTokens);
         synonymSources.addAll(repeatedPhrases);
+        List<String> synonyms = keywordSynonymDictionary.findSynonyms(synonymSources);
 
         List<String> candidates = keywordCombinationTemplate.generate(
                 productTokens,
                 categoryTokens,
                 repeatedPhrases,
-                keywordSynonymDictionary.findSynonyms(synonymSources)
+                synonyms
         );
-        return candidates.stream()
+        return keywordCandidateRanker.rank(
+                        candidates,
+                        productTokens,
+                        categoryTokens,
+                        repeatedPhrases,
+                        synonyms
+                ).stream()
+                .map(KeywordCandidateRanker.ScoredKeyword::keyword)
                 .limit(keywordCount)
                 .toList();
     }
