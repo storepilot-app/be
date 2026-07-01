@@ -10,6 +10,7 @@ import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
+import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -81,6 +82,7 @@ public class KeywordExcelFillService {
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
+    private final ProductNameTokenExtractor productNameTokenExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -648,7 +650,7 @@ public class KeywordExcelFillService {
 
     private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {
         Set<String> keywords = new LinkedHashSet<>();
-        List<String> tokens = tokenize(productName);
+        List<String> tokens = productNameTokenExtractor.extract(productName);
 
         addKeyword(keywords, myCategory);
         addKeyword(keywords, myCategory + "추천");
