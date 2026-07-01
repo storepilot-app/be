@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -58,6 +59,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
@@ -288,11 +290,29 @@ public class KeywordExcelFillService {
         int totalCount = products.size();
         progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
 
+        long allBatchesStartedAt = System.nanoTime();
+        int batchNumber = 0;
         for (int start = 0; start < totalCount; start += CATEGORY_BATCH_SIZE) {
+            batchNumber++;
             int end = Math.min(start + CATEGORY_BATCH_SIZE, totalCount);
+            long batchStartedAt = System.nanoTime();
             results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
+            log.info(
+                    "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
+                    batchNumber,
+                    end - start,
+                    end,
+                    totalCount,
+                    elapsedMillis(batchStartedAt)
+            );
             progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
         }
+        log.info(
+                "category_all_batches_timing batches={} products={} elapsedMs={}",
+                batchNumber,
+                totalCount,
+                elapsedMillis(allBatchesStartedAt)
+        );
         return results;
     }
 
