@@ -9,6 +9,8 @@ public record CategoryJobStatusResponse(
         int processedCount,
         int progress,
         String stage,
-        String message
+        String message,
+        Long categoryElapsedMillis,
+        Long keywordElapsedMillis
 ) {
 }

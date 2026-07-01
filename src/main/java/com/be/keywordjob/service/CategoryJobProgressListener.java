@@ -6,4 +6,10 @@ public interface CategoryJobProgressListener {
     };
 
     void onProgress(int processedCount, int totalCount, String stage);
+
+    default void onCategoryCompleted(long elapsedMillis) {
+    }
+
+    default void onKeywordCompleted(long elapsedMillis) {
+    }
 }

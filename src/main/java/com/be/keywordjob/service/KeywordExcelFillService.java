@@ -204,11 +204,15 @@ public class KeywordExcelFillService {
             List<CategoryMatchProductRequest> products = productRows.stream()
                     .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
                     .toList();
+            long categoryStartedAt = System.nanoTime();
             Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
                     products,
                     userKey,
                     progressListener
             );
+            progressListener.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+
+            long keywordStartedAt = System.nanoTime();
             Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
             Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
                     productRows.stream()
@@ -262,6 +266,7 @@ public class KeywordExcelFillService {
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             keywordDetailSheetWriter.write(workbook, keywordDetails);
+            progressListener.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
             progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
@@ -292,6 +297,10 @@ public class KeywordExcelFillService {
     }
 
     private record ProductExcelRow(int rowId, Row row, String productName, String category) {
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
     }
 
     private Map<Integer, String> resolveKeywordCategories(
