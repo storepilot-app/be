@@ -10,6 +10,7 @@ import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
+import com.be.keywordjob.keyword.CategoryTokenExtractor;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -82,6 +83,7 @@ public class KeywordExcelFillService {
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
+    private final CategoryTokenExtractor categoryTokenExtractor;
     private final ProductNameTokenExtractor productNameTokenExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -203,7 +205,16 @@ public class KeywordExcelFillService {
                         MyCategoryMatchResult.noCategoryMatch()
                 );
                 String myCategory = resolveMyCategory(myCategoryResult);
-                List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
+                String keywordCategory = myCategoryResult.naverCategory() == null
+                        || myCategoryResult.naverCategory().isBlank()
+                        ? category
+                        : myCategoryResult.naverCategory();
+                List<String> keywords = generateKeywords(
+                        productName,
+                        keywordCategory,
+                        myCategory,
+                        resolvedKeywordCount
+                );
 
                 row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
@@ -668,8 +679,8 @@ public class KeywordExcelFillService {
         }
 
         if (category != null && !category.isBlank()) {
-            for (String token : tokenize(category)) {
-                addKeyword(keywords, token + myCategory);
+            for (String token : categoryTokenExtractor.extract(category)) {
+                addKeyword(keywords, token);
             }
         }
 
