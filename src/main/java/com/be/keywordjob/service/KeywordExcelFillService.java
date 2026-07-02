@@ -77,7 +77,6 @@ public class KeywordExcelFillService {
     private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
     private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final int CATEGORY_BATCH_SIZE = 30;
     private static final String KEYWORD_HEADER = "키워드";
     private static final String MY_CATEGORY_HEADER = "마이카테";
     private static final String NAVER_CATEGORY_HEADER = "네이버카테";
@@ -108,6 +107,9 @@ public class KeywordExcelFillService {
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
+
+    @Value("${storepilot.category.batch-size:300}")
+    private int categoryBatchSize;
 
     public ExcelDownloadResult fillAndDownload(
             MultipartFile file,
@@ -292,9 +294,10 @@ public class KeywordExcelFillService {
 
         long allBatchesStartedAt = System.nanoTime();
         int batchNumber = 0;
-        for (int start = 0; start < totalCount; start += CATEGORY_BATCH_SIZE) {
+        int safeBatchSize = Math.max(1, categoryBatchSize);
+        for (int start = 0; start < totalCount; start += safeBatchSize) {
             batchNumber++;
-            int end = Math.min(start + CATEGORY_BATCH_SIZE, totalCount);
+            int end = Math.min(start + safeBatchSize, totalCount);
             long batchStartedAt = System.nanoTime();
             results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
             log.info(

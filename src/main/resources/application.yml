@@ -20,6 +20,8 @@ spring:
 
 storepilot:
   upload-dir: uploads
+  category:
+    batch-size: 300
 
 springdoc:
   api-docs:
