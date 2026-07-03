@@ -1,6 +1,7 @@
 package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
+import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
 import com.be.categorymatcher.dto.CategoryMatchSimilarProduct;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
@@ -69,8 +70,8 @@ public class KeywordExcelFillService {
     private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
     private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
     private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
-    private static final int LEGACY_OUTPUT_START_COLUMN_INDEX = 34; // AI
-    private static final int LEGACY_OUTPUT_END_COLUMN_INDEX = 38; // AM
+    private static final int CATEGORY_EMBEDDING_START_COLUMN_INDEX = 34; // AI
+    private static final int CATEGORY_EMBEDDING_COUNT = 5;
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
@@ -84,6 +85,7 @@ public class KeywordExcelFillService {
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
     private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
     private static final String LLM_STATUS_HEADER = "LLM상태";
+    private static final String CATEGORY_EMBEDDING_HEADER_PREFIX = "카테고리검색-";
     private static final String IMAGE_URL_COLUMN = "목록이미지1";
     private static final String PRODUCT_CODE_COLUMN = "상품코드";
     private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
@@ -183,7 +185,6 @@ public class KeywordExcelFillService {
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
             ensureTopNaverCategoryHeaders(headerRow);
-            clearLegacyOutputCells(headerRow);
             applyTopNaverCategoryColumnWidths(sheet);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
@@ -266,7 +267,7 @@ public class KeywordExcelFillService {
                 writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
                 writeSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                clearLegacyOutputCells(row);
+                writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             keywordDetailSheetWriter.write(workbook, keywordDetails);
@@ -544,6 +545,13 @@ public class KeywordExcelFillService {
         }
         ensureHeader(headerRow, SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_HEADER);
         ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            ensureHeader(
+                    headerRow,
+                    CATEGORY_EMBEDDING_START_COLUMN_INDEX + index,
+                    CATEGORY_EMBEDDING_HEADER_PREFIX + (index + 1)
+            );
+        }
     }
 
     private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
@@ -553,6 +561,9 @@ public class KeywordExcelFillService {
         }
         sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
         sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            sheet.setColumnWidth(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+        }
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
@@ -632,6 +643,28 @@ public class KeywordExcelFillService {
         row.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
     }
 
+    private void writeCategoryEmbeddingCandidates(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedCategoryStyle
+    ) {
+        List<CategoryMatchCandidate> candidates = result.topNaverCategoryCandidates();
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            Cell cell = row.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index);
+            if (index >= candidates.size()) {
+                cell.setCellValue("");
+                continue;
+            }
+            CategoryMatchCandidate candidate = candidates.get(index);
+            cell.setCellValue(String.format(Locale.ROOT, "%s (%.4f)", candidate.fullPath(), candidate.score()));
+            if ("SELECTED".equals(result.llmStatus())
+                    && result.naverCategory() != null
+                    && result.naverCategory().equals(candidate.fullPath())) {
+                cell.setCellStyle(selectedCategoryStyle);
+            }
+        }
+    }
+
     private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
         Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
@@ -667,7 +700,6 @@ public class KeywordExcelFillService {
         if (summaryRow == null) {
             summaryRow = sheet.createRow(summaryRowIndex);
         }
-        clearLegacyOutputCells(summaryRow);
         summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue("못찾음/거절 비율");
         summaryRow.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(String.format(
                 Locale.ROOT,
@@ -676,16 +708,8 @@ public class KeywordExcelFillService {
                 totalCount,
                 ratio
         ));
-    }
-
-    private void clearLegacyOutputCells(Row row) {
-        for (int columnIndex = LEGACY_OUTPUT_START_COLUMN_INDEX;
-             columnIndex <= LEGACY_OUTPUT_END_COLUMN_INDEX;
-             columnIndex++) {
-            Cell cell = row.getCell(columnIndex);
-            if (cell != null) {
-                row.removeCell(cell);
-            }
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            summaryRow.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index).setCellValue("");
         }
     }
 
