@@ -1,6 +1,7 @@
 package com.be.keywordjob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
+import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
 import com.be.categorymatcher.dto.CategoryMatchSimilarProduct;
 import com.be.categorymatcher.dto.MyCategoryMatchResult;
@@ -10,6 +11,17 @@ import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
+import com.be.keywordjob.excel.KeywordDetailSheetWriter;
+import com.be.keywordjob.keyword.CategoryTokenExtractor;
+import com.be.keywordjob.keyword.KeywordCandidateRanker;
+import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
+import com.be.keywordjob.keyword.KeywordCombinationTemplate;
+import com.be.keywordjob.keyword.KeywordDetailEntry;
+import com.be.keywordjob.keyword.KeywordSynonymDictionary;
+import com.be.keywordjob.keyword.KeywordSynonymDictionary.SynonymExpansion;
+import com.be.keywordjob.keyword.ProductNameTokenExtractor;
+import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
+import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,6 +44,7 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -47,6 +60,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KeywordExcelFillService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
@@ -56,15 +70,14 @@ public class KeywordExcelFillService {
     private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
     private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
     private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
-    private static final int LEGACY_OUTPUT_START_COLUMN_INDEX = 34; // AI
-    private static final int LEGACY_OUTPUT_END_COLUMN_INDEX = 38; // AM
+    private static final int CATEGORY_EMBEDDING_START_COLUMN_INDEX = 34; // AI
+    private static final int CATEGORY_EMBEDDING_COUNT = 5;
     private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
     private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
     private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
     private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
     private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final int CATEGORY_BATCH_SIZE = 30;
     private static final String KEYWORD_HEADER = "키워드";
     private static final String MY_CATEGORY_HEADER = "마이카테";
     private static final String NAVER_CATEGORY_HEADER = "네이버카테";
@@ -72,6 +85,7 @@ public class KeywordExcelFillService {
     private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
     private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
     private static final String LLM_STATUS_HEADER = "LLM상태";
+    private static final String CATEGORY_EMBEDDING_HEADER_PREFIX = "카테고리검색-";
     private static final String IMAGE_URL_COLUMN = "목록이미지1";
     private static final String PRODUCT_CODE_COLUMN = "상품코드";
     private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
@@ -81,6 +95,13 @@ public class KeywordExcelFillService {
 
     private final CategoryMatcherService categoryMatcherService;
     private final KeywordJobUploadService keywordJobUploadService;
+    private final CategoryTokenExtractor categoryTokenExtractor;
+    private final KeywordCandidateRanker keywordCandidateRanker;
+    private final KeywordCombinationTemplate keywordCombinationTemplate;
+    private final KeywordDetailSheetWriter keywordDetailSheetWriter;
+    private final KeywordSynonymDictionary keywordSynonymDictionary;
+    private final ProductNameTokenExtractor productNameTokenExtractor;
+    private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -88,6 +109,9 @@ public class KeywordExcelFillService {
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
+
+    @Value("${storepilot.category.batch-size:300}")
+    private int categoryBatchSize;
 
     public ExcelDownloadResult fillAndDownload(
             MultipartFile file,
@@ -161,7 +185,6 @@ public class KeywordExcelFillService {
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
             ensureTopNaverCategoryHeaders(headerRow);
-            clearLegacyOutputCells(headerRow);
             applyTopNaverCategoryColumnWidths(sheet);
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
@@ -186,11 +209,26 @@ public class KeywordExcelFillService {
             List<CategoryMatchProductRequest> products = productRows.stream()
                     .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
                     .toList();
+            long categoryStartedAt = System.nanoTime();
             Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
                     products,
                     userKey,
                     progressListener
             );
+            progressListener.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+
+            long keywordStartedAt = System.nanoTime();
+            Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
+            Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
+                    productRows.stream()
+                            .map(productRow -> new ProductSource(
+                                    productRow.rowId(),
+                                    productRow.productName(),
+                                    keywordCategories.get(productRow.rowId())
+                            ))
+                            .toList()
+            );
+            List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
 
             for (ProductExcelRow productRow : productRows) {
                 Row row = productRow.row();
@@ -201,18 +239,39 @@ public class KeywordExcelFillService {
                         MyCategoryMatchResult.noCategoryMatch()
                 );
                 String myCategory = resolveMyCategory(myCategoryResult);
-                List<String> keywords = generateKeywords(productName, category, myCategory, resolvedKeywordCount);
+                String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
+                List<GeneratedKeyword> keywords = generateKeywords(
+                        productName,
+                        keywordCategory,
+                        repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
+                        resolvedKeywordCount
+                );
 
-                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(String.join(", ", keywords));
+                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
+                        .map(keyword -> keyword.score().keyword())
+                        .collect(java.util.stream.Collectors.joining(", ")));
+                for (int index = 0; index < keywords.size(); index++) {
+                    GeneratedKeyword keyword = keywords.get(index);
+                    keywordDetails.add(new KeywordDetailEntry(
+                            productRow.rowId() + 1,
+                            productName,
+                            keywordCategory,
+                            index + 1,
+                            keyword.score(),
+                            keyword.reasons()
+                    ));
+                }
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
                 row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
                 writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
                 writeSelectedCategory(row, myCategoryResult);
                 writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                clearLegacyOutputCells(row);
+                writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            keywordDetailSheetWriter.write(workbook, keywordDetails);
+            progressListener.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
             progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
@@ -234,15 +293,54 @@ public class KeywordExcelFillService {
         int totalCount = products.size();
         progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
 
-        for (int start = 0; start < totalCount; start += CATEGORY_BATCH_SIZE) {
-            int end = Math.min(start + CATEGORY_BATCH_SIZE, totalCount);
+        long allBatchesStartedAt = System.nanoTime();
+        int batchNumber = 0;
+        int safeBatchSize = Math.max(1, categoryBatchSize);
+        for (int start = 0; start < totalCount; start += safeBatchSize) {
+            batchNumber++;
+            int end = Math.min(start + safeBatchSize, totalCount);
+            long batchStartedAt = System.nanoTime();
             results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
+            log.info(
+                    "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
+                    batchNumber,
+                    end - start,
+                    end,
+                    totalCount,
+                    elapsedMillis(batchStartedAt)
+            );
             progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
         }
+        log.info(
+                "category_all_batches_timing batches={} products={} elapsedMs={}",
+                batchNumber,
+                totalCount,
+                elapsedMillis(allBatchesStartedAt)
+        );
         return results;
     }
 
     private record ProductExcelRow(int rowId, Row row, String productName, String category) {
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
+    }
+
+    private Map<Integer, String> resolveKeywordCategories(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> categoryResults
+    ) {
+        Map<Integer, String> categories = new HashMap<>();
+        for (ProductExcelRow productRow : productRows) {
+            MyCategoryMatchResult result = categoryResults.get(productRow.rowId());
+            String category = result == null ? null : result.naverCategory();
+            categories.put(
+                    productRow.rowId(),
+                    category == null || category.isBlank() ? productRow.category() : category
+            );
+        }
+        return categories;
     }
 
     public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
@@ -447,6 +545,13 @@ public class KeywordExcelFillService {
         }
         ensureHeader(headerRow, SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_HEADER);
         ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            ensureHeader(
+                    headerRow,
+                    CATEGORY_EMBEDDING_START_COLUMN_INDEX + index,
+                    CATEGORY_EMBEDDING_HEADER_PREFIX + (index + 1)
+            );
+        }
     }
 
     private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
@@ -456,6 +561,9 @@ public class KeywordExcelFillService {
         }
         sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
         sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            sheet.setColumnWidth(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+        }
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
@@ -535,6 +643,28 @@ public class KeywordExcelFillService {
         row.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
     }
 
+    private void writeCategoryEmbeddingCandidates(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedCategoryStyle
+    ) {
+        List<CategoryMatchCandidate> candidates = result.topNaverCategoryCandidates();
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            Cell cell = row.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index);
+            if (index >= candidates.size()) {
+                cell.setCellValue("");
+                continue;
+            }
+            CategoryMatchCandidate candidate = candidates.get(index);
+            cell.setCellValue(String.format(Locale.ROOT, "%s (%.4f)", candidate.fullPath(), candidate.score()));
+            if ("SELECTED".equals(result.llmStatus())
+                    && result.naverCategory() != null
+                    && result.naverCategory().equals(candidate.fullPath())) {
+                cell.setCellStyle(selectedCategoryStyle);
+            }
+        }
+    }
+
     private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
         Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
@@ -570,7 +700,6 @@ public class KeywordExcelFillService {
         if (summaryRow == null) {
             summaryRow = sheet.createRow(summaryRowIndex);
         }
-        clearLegacyOutputCells(summaryRow);
         summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue("못찾음/거절 비율");
         summaryRow.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(String.format(
                 Locale.ROOT,
@@ -579,16 +708,8 @@ public class KeywordExcelFillService {
                 totalCount,
                 ratio
         ));
-    }
-
-    private void clearLegacyOutputCells(Row row) {
-        for (int columnIndex = LEGACY_OUTPUT_START_COLUMN_INDEX;
-             columnIndex <= LEGACY_OUTPUT_END_COLUMN_INDEX;
-             columnIndex++) {
-            Cell cell = row.getCell(columnIndex);
-            if (cell != null) {
-                row.removeCell(cell);
-            }
+        for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
+            summaryRow.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index).setCellValue("");
         }
     }
 
@@ -646,60 +767,144 @@ public class KeywordExcelFillService {
         );
     }
 
-    private List<String> generateKeywords(String productName, String category, String myCategory, int keywordCount) {
-        Set<String> keywords = new LinkedHashSet<>();
-        List<String> tokens = tokenize(productName);
+    private List<GeneratedKeyword> generateKeywords(
+            String productName,
+            String category,
+            List<String> repeatedPhrases,
+            int keywordCount
+    ) {
+        List<String> productTokens = productNameTokenExtractor.extract(productName);
+        List<String> categoryTokens = categoryTokenExtractor.extract(category);
+        List<String> synonymSources = new ArrayList<>();
+        synonymSources.addAll(productTokens);
+        synonymSources.addAll(categoryTokens);
+        synonymSources.addAll(repeatedPhrases);
+        List<SynonymExpansion> synonymExpansions = keywordSynonymDictionary.findExpansions(synonymSources);
+        List<String> synonyms = synonymExpansions.stream()
+                .map(SynonymExpansion::keyword)
+                .toList();
 
-        addKeyword(keywords, myCategory);
-        addKeyword(keywords, myCategory + "추천");
-        addKeyword(keywords, myCategory + "선물");
-        addKeyword(keywords, myCategory + "문구");
-        addKeyword(keywords, "감성" + myCategory);
-        addKeyword(keywords, "귀여운" + myCategory);
-        addKeyword(keywords, "디자인" + myCategory);
-        addKeyword(keywords, "학생" + myCategory);
-        addKeyword(keywords, "사무용" + myCategory);
-
-        for (String token : tokens) {
-            addKeyword(keywords, token + myCategory);
-            addKeyword(keywords, token);
-        }
-
-        if (category != null && !category.isBlank()) {
-            for (String token : tokenize(category)) {
-                addKeyword(keywords, token + myCategory);
-            }
-        }
-
-        return keywords.stream()
+        List<String> candidates = keywordCombinationTemplate.generate(
+                productTokens,
+                categoryTokens,
+                repeatedPhrases,
+                synonyms
+        );
+        return keywordCandidateRanker.rank(
+                        candidates,
+                        productTokens,
+                        categoryTokens,
+                        repeatedPhrases,
+                        synonyms
+                ).stream()
                 .limit(keywordCount)
+                .map(score -> new GeneratedKeyword(
+                        score,
+                        resolveKeywordReasons(
+                                score.keyword(),
+                                productTokens,
+                                categoryTokens,
+                                repeatedPhrases,
+                                synonymExpansions
+                        )
+                ))
                 .toList();
     }
 
-    private List<String> tokenize(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
+    private List<String> resolveKeywordReasons(
+            String keyword,
+            List<String> productTokens,
+            List<String> categoryTokens,
+            List<String> repeatedPhrases,
+            List<SynonymExpansion> synonymExpansions
+    ) {
+        Set<String> reasons = new LinkedHashSet<>();
+        if (containsKeyword(categoryTokens, keyword)) {
+            reasons.add("카테고리 핵심어");
         }
-
-        String[] rawTokens = text.split("[\\s_/(),\\[\\]-]+");
-        List<String> tokens = new ArrayList<>();
-        for (String rawToken : rawTokens) {
-            String token = rawToken.replaceAll("[^\\p{IsHangul}A-Za-z0-9]", "").trim();
-            if (token.length() >= 2 && !tokens.contains(token)) {
-                tokens.add(token);
-            }
+        if (containsKeyword(repeatedPhrases, keyword)) {
+            reasons.add("유사상품 반복 표현");
         }
-        return tokens;
+        synonymExpansions.stream()
+                .filter(expansion -> sameKeyword(expansion.keyword(), keyword))
+                .map(expansion -> "동의어 치환: " + expansion.sourceTerm() + " → " + expansion.keyword())
+                .forEach(reasons::add);
+        if (containsKeyword(productTokens, keyword)) {
+            reasons.add("상품명 토큰");
+        }
+        if (isProductTokenCombination(keyword, productTokens)) {
+            reasons.add("상품명 토큰 조합");
+        }
+        if (isProductCategoryCombination(keyword, productTokens, categoryTokens)) {
+            reasons.add("상품명 + 카테고리 조합");
+        }
+        if (reasons.isEmpty()) {
+            reasons.add("조합 템플릿");
+        }
+        return List.copyOf(reasons);
     }
 
-    private void addKeyword(Set<String> keywords, String keyword) {
-        if (keyword == null) {
-            return;
+    private boolean containsKeyword(List<String> values, String keyword) {
+        return values.stream().anyMatch(value -> sameKeyword(value, keyword));
+    }
+
+    private boolean isProductTokenCombination(String keyword, List<String> productTokens) {
+        if (productTokens.size() >= 2 && sameKeyword(String.join("", productTokens), keyword)) {
+            return true;
         }
-        String cleaned = keyword.replaceAll("\\s+", "").trim();
-        if (cleaned.length() >= 2 && cleaned.length() <= 20) {
-            keywords.add(cleaned);
+        for (int index = 0; index + 1 < productTokens.size(); index++) {
+            if (sameKeyword(productTokens.get(index) + productTokens.get(index + 1), keyword)) {
+                return true;
+            }
         }
+        return false;
+    }
+
+    private boolean isProductCategoryCombination(
+            String keyword,
+            List<String> productTokens,
+            List<String> categoryTokens
+    ) {
+        if (categoryTokens.isEmpty()) {
+            return false;
+        }
+        String primaryCategory = categoryTokens.getFirst();
+        for (int index = 0; index < productTokens.size(); index++) {
+            if (sameKeyword(combineWithCategory(List.of(productTokens.get(index)), primaryCategory), keyword)) {
+                return true;
+            }
+            if (index + 1 < productTokens.size()
+                    && sameKeyword(
+                    combineWithCategory(productTokens.subList(index, index + 2), primaryCategory),
+                    keyword
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String combineWithCategory(List<String> tokens, String category) {
+        StringBuilder prefix = new StringBuilder();
+        String normalizedCategory = normalizeKeyword(category);
+        for (String token : tokens) {
+            String normalizedToken = normalizeKeyword(token);
+            if (!normalizedCategory.contains(normalizedToken) && !normalizedToken.contains(normalizedCategory)) {
+                prefix.append(token);
+            }
+        }
+        return prefix.isEmpty() ? category : prefix + category;
+    }
+
+    private boolean sameKeyword(String first, String second) {
+        return normalizeKeyword(first).equals(normalizeKeyword(second));
+    }
+
+    private String normalizeKeyword(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
     }
 
     private Path resolveImageDirectory(String imageOutputDir) {

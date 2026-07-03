@@ -12,11 +12,15 @@ class CategoryJobTest {
 
         job.start();
         job.updateProgress(30, 100, "카테고리 찾는 중");
+        job.recordCategoryElapsed(1_250);
+        job.recordKeywordElapsed(340);
 
         assertEquals(CategoryJobStatus.PROCESSING, job.getStatus());
         assertEquals(30, job.getProcessedCount());
         assertEquals(100, job.getTotalCount());
         assertEquals(29, job.getProgress());
+        assertEquals(1_250L, job.getCategoryElapsedMillis());
+        assertEquals(340L, job.getKeywordElapsedMillis());
 
         job.complete("result.xlsx", new byte[]{1});
 

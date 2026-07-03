@@ -8,6 +8,7 @@ import com.be.categoryjob.repository.CategoryJobRepository;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
+import com.be.keywordjob.service.CategoryJobProgressListener;
 import com.be.keywordjob.service.KeywordExcelFillService;
 import com.be.keywordjob.service.KeywordJobUploadService;
 import java.io.IOException;
@@ -82,7 +83,9 @@ public class CategoryJobService {
                 job.getProcessedCount(),
                 job.getProgress(),
                 job.getStage(),
-                job.getMessage()
+                job.getMessage(),
+                job.getCategoryElapsedMillis(),
+                job.getKeywordElapsedMillis()
         );
     }
 
@@ -106,7 +109,22 @@ public class CategoryJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserKey(),
-                    job::updateProgress
+                    new CategoryJobProgressListener() {
+                        @Override
+                        public void onProgress(int processedCount, int totalCount, String stage) {
+                            job.updateProgress(processedCount, totalCount, stage);
+                        }
+
+                        @Override
+                        public void onCategoryCompleted(long elapsedMillis) {
+                            job.recordCategoryElapsed(elapsedMillis);
+                        }
+
+                        @Override
+                        public void onKeywordCompleted(long elapsedMillis) {
+                            job.recordKeywordElapsed(elapsedMillis);
+                        }
+                    }
             );
             job.complete(result.filename(), result.content());
         } catch (Exception error) {

@@ -15,6 +15,8 @@ public class CategoryJob {
     private volatile int progress;
     private volatile String stage;
     private volatile String message;
+    private volatile Long categoryElapsedMillis;
+    private volatile Long keywordElapsedMillis;
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
@@ -54,6 +56,14 @@ public class CategoryJob {
         this.stage = "완료";
         this.status = CategoryJobStatus.COMPLETED;
         this.message = "결과 엑셀을 다운로드할 수 있습니다.";
+    }
+
+    public synchronized void recordCategoryElapsed(long elapsedMillis) {
+        this.categoryElapsedMillis = Math.max(0L, elapsedMillis);
+    }
+
+    public synchronized void recordKeywordElapsed(long elapsedMillis) {
+        this.keywordElapsedMillis = Math.max(0L, elapsedMillis);
     }
 
     public synchronized void fail(String message) {
@@ -104,6 +114,14 @@ public class CategoryJob {
 
     public String getMessage() {
         return message;
+    }
+
+    public Long getCategoryElapsedMillis() {
+        return categoryElapsedMillis;
+    }
+
+    public Long getKeywordElapsedMillis() {
+        return keywordElapsedMillis;
     }
 
     public String getResultFilename() {

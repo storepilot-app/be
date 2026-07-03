@@ -293,14 +293,7 @@ public class CategoryMatcherService {
 
     private List<CategoryMatchCandidate> topCandidates(CategoryMatchPrediction prediction) {
         if (prediction.candidates() == null || prediction.candidates().isEmpty()) {
-            return prediction.fullPath() == null || prediction.fullPath().isBlank()
-                    ? List.of()
-                    : List.of(new CategoryMatchCandidate(
-                            prediction.categoryId(),
-                            prediction.categoryCode(),
-                            prediction.fullPath(),
-                            prediction.score()
-                    ));
+            return List.of();
         }
         return prediction.candidates().stream()
                 .filter(candidate -> candidate.fullPath() != null && !candidate.fullPath().isBlank())
