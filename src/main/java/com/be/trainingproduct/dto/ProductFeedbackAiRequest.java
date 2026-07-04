@@ -1,4 +1,4 @@
-package com.be.categorymatcher.dto;
+package com.be.trainingproduct.dto;
 
 public record ProductFeedbackAiRequest(
         String userKey,

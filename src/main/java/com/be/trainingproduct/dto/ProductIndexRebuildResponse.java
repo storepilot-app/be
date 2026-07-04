@@ -1,4 +1,4 @@
-package com.be.categorymatcher.dto;
+package com.be.trainingproduct.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

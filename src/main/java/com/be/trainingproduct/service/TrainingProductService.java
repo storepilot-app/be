@@ -1,10 +1,5 @@
 package com.be.trainingproduct.service;
 
-import com.be.categorymatcher.client.CategoryMatcherAiClient;
-import com.be.categorymatcher.dto.CategoryMatchMappingItem;
-import com.be.categorymatcher.dto.ProductFeedbackAiRequest;
-import com.be.categorymatcher.dto.ProductFeedbackAiResponse;
-import com.be.categorymatcher.dto.ProductIndexRebuildResponse;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.mycategory.domain.MyCategoryMapping;
@@ -12,8 +7,13 @@ import com.be.mycategory.domain.MyCategoryMappingVersion;
 import com.be.mycategory.repository.MyCategoryMappingRepository;
 import com.be.mycategory.repository.MyCategoryMappingVersionRepository;
 import com.be.trainingproduct.domain.ProductCategoryFeedback;
+import com.be.trainingproduct.client.TrainingProductAiClient;
+import com.be.trainingproduct.dto.CategoryMatchMappingItem;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
+import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
+import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
+import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.time.Instant;
 import java.util.List;
@@ -26,7 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class TrainingProductService {
-    private final CategoryMatcherAiClient categoryMatcherAiClient;
+    private final TrainingProductAiClient trainingProductAiClient;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
@@ -51,7 +51,7 @@ public class TrainingProductService {
         if (mappings.isEmpty()) {
             throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
         }
-        return categoryMatcherAiClient.rebuildProductIndex(trimmedUserKey, files, mappings);
+        return trainingProductAiClient.rebuildProductIndex(trimmedUserKey, files, mappings);
     }
 
     @Transactional
@@ -83,7 +83,7 @@ public class TrainingProductService {
                 mapping.getNaverCategoryFullPath(),
                 Instant.now()
         ));
-        ProductFeedbackAiResponse aiResponse = categoryMatcherAiClient.addProductFeedback(
+        ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
                 new ProductFeedbackAiRequest(
                         userKey,
                         productName,

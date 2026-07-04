@@ -1,9 +1,9 @@
 package com.be.trainingproduct.controller;
 
-import com.be.categorymatcher.dto.ProductIndexRebuildResponse;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
+import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.service.TrainingProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
