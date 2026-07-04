@@ -20,6 +20,8 @@ spring:
 
 storepilot:
   upload-dir: uploads
+  ai:
+    base-url: ${AI_SERVER_BASE_URL:http://127.0.0.1:8000}
   category:
     batch-size: 300
 

@@ -657,7 +657,7 @@ public class KeywordExcelFillService {
             }
             CategoryMatchCandidate candidate = candidates.get(index);
             cell.setCellValue(String.format(Locale.ROOT, "%s (%.4f)", candidate.fullPath(), candidate.score()));
-            if ("SELECTED".equals(result.llmStatus())
+            if (("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus()))
                     && result.naverCategory() != null
                     && result.naverCategory().equals(candidate.fullPath())) {
                 cell.setCellStyle(selectedCategoryStyle);
