@@ -34,9 +34,9 @@ public class TrainingProductService {
     public ProductIndexRebuildResponse rebuildIndex(String userKey, List<MultipartFile> files) {
         String trimmedUserKey = validateAndTrimUserKey(userKey);
         validateFiles(files);
-        MyCategoryMappingVersion version = activeMappingVersion(trimmedUserKey);
+        MyCategoryMappingVersion activeMappingVersion = getRequiredActiveMappingVersion(trimmedUserKey);
         List<CategoryMatchMappingItem> mappings = myCategoryMappingRepository
-                .findByUserKeyAndVersionId(trimmedUserKey, version.getId())
+                .findByUserKeyAndVersionId(trimmedUserKey, activeMappingVersion.getId())
                 .stream()
                 .filter(mapping -> mapping.getNaverCategoryId() != null)
                 .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
@@ -62,9 +62,13 @@ public class TrainingProductService {
         String userKey = validateAndTrimUserKey(request.userKey());
         String productName = required(request.productName(), "상품명은 필수입니다.");
         String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
-        MyCategoryMappingVersion version = activeMappingVersion(userKey);
+        MyCategoryMappingVersion activeMappingVersion = getRequiredActiveMappingVersion(userKey);
         MyCategoryMapping mapping = myCategoryMappingRepository
-                .findFirstByUserKeyAndVersionIdAndMyCategoryCode(userKey, version.getId(), myCategoryCode)
+                .findFirstByUserKeyAndVersionIdAndMyCategoryCode(
+                        userKey,
+                        activeMappingVersion.getId(),
+                        myCategoryCode
+                )
                 .filter(item -> item.getNaverCategoryId() != null)
                 .filter(item -> item.getNaverCategoryCode() != null && !item.getNaverCategoryCode().isBlank())
                 .filter(item -> item.getNaverCategoryFullPath() != null && !item.getNaverCategoryFullPath().isBlank())
@@ -98,16 +102,19 @@ public class TrainingProductService {
         );
     }
 
-    private MyCategoryMappingVersion activeMappingVersion(String userKey) {
+    private MyCategoryMappingVersion getRequiredActiveMappingVersion(String userKey) {
         return myCategoryMappingVersionRepository
                 .findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(userKey)
                 .orElseThrow(() -> invalid("상품 인덱스를 생성하기 전에 마이카테고리 매핑을 업로드해 주세요."));
     }
 
     private void validateFiles(List<MultipartFile> files) {
+        // 파일이 아예 없는 경우
         if (files == null || files.isEmpty()) {
             throw invalid("기존 상품 엑셀 파일을 하나 이상 업로드해 주세요.");
         }
+
+        // 업로드된 파일 중 하나라도 잘못됐는지 확인
         boolean invalidFile = files.stream().anyMatch(file ->
                 file == null
                         || file.isEmpty()
