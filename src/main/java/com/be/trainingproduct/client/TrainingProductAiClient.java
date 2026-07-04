@@ -2,6 +2,7 @@ package com.be.trainingproduct.client;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.config.properties.AiServerProperties;
 import com.be.trainingproduct.dto.CategoryMatchMappingItem;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
@@ -10,7 +11,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -25,9 +25,7 @@ public class TrainingProductAiClient {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient.Builder restClientBuilder;
-
-    @Value("${storepilot.ai.base-url:http://127.0.0.1:8000}")
-    private String aiBaseUrl;
+    private final AiServerProperties aiServerProperties;
 
     public ProductIndexRebuildResponse rebuildProductIndex(
             String userKey,
@@ -91,6 +89,6 @@ public class TrainingProductAiClient {
     }
 
     private RestClient restClient() {
-        return restClientBuilder.baseUrl(aiBaseUrl).build();
+        return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
     }
 }

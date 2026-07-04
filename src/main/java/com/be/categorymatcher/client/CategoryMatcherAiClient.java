@@ -5,11 +5,11 @@ import com.be.categorymatcher.dto.CategoryEmbeddingRebuildRequest;
 import com.be.categorymatcher.dto.CategoryMatchPredictRequest;
 import com.be.categorymatcher.dto.CategoryMatchPredictResponse;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
+import com.be.global.config.properties.AiServerProperties;
 import com.be.navercategory.domain.NaverCategory;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -18,9 +18,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class CategoryMatcherAiClient {
     private final RestClient.Builder restClientBuilder;
-
-    @Value("${storepilot.ai.base-url:http://127.0.0.1:8000}")
-    private String aiBaseUrl;
+    private final AiServerProperties aiServerProperties;
 
     public void rebuild(Long versionId, List<NaverCategory> categories) {
         List<CategoryEmbeddingItem> items = categories.stream()
@@ -61,6 +59,6 @@ public class CategoryMatcherAiClient {
     }
 
     private RestClient restClient() {
-        return restClientBuilder.baseUrl(aiBaseUrl).build();
+        return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
     }
 }
