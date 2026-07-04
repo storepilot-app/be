@@ -32,11 +32,11 @@ public class TrainingProductService {
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
 
     public ProductIndexRebuildResponse rebuildIndex(String userKey, List<MultipartFile> files) {
-        String normalizedUserKey = normalizeUserKey(userKey);
+        String trimmedUserKey = validateAndTrimUserKey(userKey);
         validateFiles(files);
-        MyCategoryMappingVersion version = activeMappingVersion(normalizedUserKey);
+        MyCategoryMappingVersion version = activeMappingVersion(trimmedUserKey);
         List<CategoryMatchMappingItem> mappings = myCategoryMappingRepository
-                .findByUserKeyAndVersionId(normalizedUserKey, version.getId())
+                .findByUserKeyAndVersionId(trimmedUserKey, version.getId())
                 .stream()
                 .filter(mapping -> mapping.getNaverCategoryId() != null)
                 .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
@@ -49,26 +49,26 @@ public class TrainingProductService {
                 ))
                 .toList();
         if (mappings.isEmpty()) {
-            throw invalid("Active my-category mappings contain no resolved Naver categories.");
+            throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
         }
-        return categoryMatcherAiClient.rebuildProductIndex(normalizedUserKey, files, mappings);
+        return categoryMatcherAiClient.rebuildProductIndex(trimmedUserKey, files, mappings);
     }
 
     @Transactional
     public ProductCategoryFeedbackResponse addFeedback(ProductCategoryFeedbackRequest request) {
         if (request == null) {
-            throw invalid("Feedback request is required.");
+            throw invalid("피드백 요청 정보가 필요합니다.");
         }
-        String userKey = normalizeUserKey(request.userKey());
-        String productName = required(request.productName(), "Product name is required.");
-        String myCategoryCode = required(request.myCategoryCode(), "My category code is required.");
+        String userKey = validateAndTrimUserKey(request.userKey());
+        String productName = required(request.productName(), "상품명은 필수입니다.");
+        String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
         MyCategoryMappingVersion version = activeMappingVersion(userKey);
         MyCategoryMapping mapping = myCategoryMappingRepository
                 .findFirstByUserKeyAndVersionIdAndMyCategoryCode(userKey, version.getId(), myCategoryCode)
                 .filter(item -> item.getNaverCategoryId() != null)
                 .filter(item -> item.getNaverCategoryCode() != null && !item.getNaverCategoryCode().isBlank())
                 .filter(item -> item.getNaverCategoryFullPath() != null && !item.getNaverCategoryFullPath().isBlank())
-                .orElseThrow(() -> invalid("My category code has no Naver category mapping."));
+                .orElseThrow(() -> invalid("마이카테고리 코드에 대응하는 네이버 카테고리 매핑이 없습니다."));
 
         ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(new ProductCategoryFeedback(
                 userKey,
@@ -94,19 +94,19 @@ public class TrainingProductService {
                 myCategoryCode,
                 mapping.getNaverCategoryFullPath(),
                 aiResponse.indexedProductCount(),
-                "Product category feedback saved."
+                "상품 카테고리 수정 피드백이 저장되었습니다."
         );
     }
 
     private MyCategoryMappingVersion activeMappingVersion(String userKey) {
         return myCategoryMappingVersionRepository
                 .findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(userKey)
-                .orElseThrow(() -> invalid("Upload my category mappings before building the product index."));
+                .orElseThrow(() -> invalid("상품 인덱스를 생성하기 전에 마이카테고리 매핑을 업로드해 주세요."));
     }
 
     private void validateFiles(List<MultipartFile> files) {
         if (files == null || files.isEmpty()) {
-            throw invalid("At least one historical product Excel file is required.");
+            throw invalid("기존 상품 엑셀 파일을 하나 이상 업로드해 주세요.");
         }
         boolean invalidFile = files.stream().anyMatch(file ->
                 file == null
@@ -115,12 +115,12 @@ public class TrainingProductService {
                         || !file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx")
         );
         if (invalidFile) {
-            throw invalid("Historical product files must be non-empty .xlsx files.");
+            throw invalid("기존 상품 파일은 비어 있지 않은 .xlsx 형식이어야 합니다.");
         }
     }
 
-    private String normalizeUserKey(String value) {
-        return required(value, "User key is required.");
+    private String validateAndTrimUserKey(String value) {
+        return required(value, "사용자 식별자는 필수입니다.");
     }
 
     private String required(String value, String message) {
