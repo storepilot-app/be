@@ -63,7 +63,7 @@ public class NaverCategoryUploadService {
 
             List<NaverCategory> categories = parseCategories(uploadedFilePath);
             if (categories.isEmpty()) {
-                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Naver category file has no category rows.");
+                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일에 유효한 카테고리 행이 없습니다.");
             }
 
             naverCategoryVersionRepository.deactivateActiveVersions();
@@ -87,7 +87,7 @@ public class NaverCategoryUploadService {
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Failed to upload Naver category file.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일을 업로드하지 못했습니다.");
         }
     }
 
@@ -96,7 +96,7 @@ public class NaverCategoryUploadService {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Naver category header row is empty.");
+                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일의 헤더 행이 비어 있습니다.");
             }
 
             Map<String, Integer> headerIndexes = resolveHeaderIndexes(headerRow);
@@ -125,7 +125,7 @@ public class NaverCategoryUploadService {
 
             return new ArrayList<>(categoriesByCode.values());
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Failed to parse Naver category file.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일을 해석하지 못했습니다.");
         }
     }
 
@@ -147,7 +147,7 @@ public class NaverCategoryUploadService {
 
     private void requireHeader(Map<String, Integer> indexes, String header) {
         if (!indexes.containsKey(header)) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Required header missing: " + header);
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "필수 헤더가 없습니다: " + header);
         }
     }
 
@@ -195,12 +195,12 @@ public class NaverCategoryUploadService {
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Please upload a Naver category excel file.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 엑셀 파일을 업로드해 주세요.");
         }
 
         String filename = file.getOriginalFilename();
         if (filename == null || !isExcelFilename(filename)) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Invalid Naver category excel file format.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 엑셀 파일 형식이 올바르지 않습니다.");
         }
     }
 

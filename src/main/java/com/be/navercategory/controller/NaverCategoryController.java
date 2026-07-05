@@ -21,18 +21,18 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/admin/naver-categories")
-@Tag(name = "Naver Categories", description = "Naver category upload and cache API")
+@Tag(name = "네이버 카테고리", description = "네이버 카테고리 업로드 및 캐시 관리 API")
 @RequiredArgsConstructor
 public class NaverCategoryController {
     private final NaverCategoryUploadService naverCategoryUploadService;
 
     @Operation(
-            summary = "Upload Naver category excel",
-            description = "Uploads Naver category excel, parses category rows, activates the new version, and regenerates CSV cache.",
+            summary = "네이버 카테고리 엑셀 업로드",
+            description = "네이버 카테고리 엑셀을 해석하여 새 버전을 활성화하고 CSV 캐시와 카테고리 임베딩을 재생성합니다.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "Upload successful",
+                            description = "업로드 성공",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                     schema = @Schema(implementation = CommonResponse.class),
@@ -45,9 +45,9 @@ public class NaverCategoryController {
                                                 "rowCount": 5009,
                                                 "categoryCount": 5009,
                                                 "csvPath": "C:/Project/StorePilot/be/uploads/naver-categories/active/naver_categories.csv",
-                                                "message": "Naver categories uploaded."
+                                                "message": "네이버 카테고리가 업로드되었습니다."
                                               },
-                                              "message": "Naver categories uploaded.",
+                                              "message": "네이버 카테고리가 업로드되었습니다.",
                                               "code": null,
                                               "errors": null
                                             }
@@ -58,7 +58,7 @@ public class NaverCategoryController {
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<NaverCategoryUploadResponse> upload(
-            @Parameter(description = "Naver category excel file(.xlsx, .xls)", required = true)
+            @Parameter(description = "네이버 카테고리 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
         NaverCategoryVersion version = naverCategoryUploadService.upload(file);
@@ -68,7 +68,7 @@ public class NaverCategoryController {
                 version.getRowCount(),
                 version.getCategoryCount(),
                 version.getCsvFilePath(),
-                "Naver categories uploaded."
+                "네이버 카테고리가 업로드되었습니다."
         );
         return CommonResponse.success(response, response.message());
     }
