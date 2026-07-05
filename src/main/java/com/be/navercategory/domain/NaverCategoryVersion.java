@@ -41,7 +41,7 @@ public class NaverCategoryVersion {
     @Column(name = "active", nullable = false)
     private boolean active;
 
-    public NaverCategoryVersion(
+    private NaverCategoryVersion(
             String sourceFilename,
             int rowCount,
             int categoryCount,
@@ -57,5 +57,24 @@ public class NaverCategoryVersion {
         this.csvFilePath = csvFilePath;
         this.uploadedAt = uploadedAt;
         this.active = active;
+    }
+
+    public static NaverCategoryVersion createActive(
+            String sourceFilename,
+            int rowCount,
+            int categoryCount,
+            String uploadedFilePath,
+            String csvFilePath,
+            Instant uploadedAt
+    ) {
+        return new NaverCategoryVersion(
+                sourceFilename,
+                rowCount,
+                categoryCount,
+                uploadedFilePath,
+                csvFilePath,
+                uploadedAt,
+                true
+        );
     }
 }

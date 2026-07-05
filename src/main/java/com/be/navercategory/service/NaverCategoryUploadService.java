@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -32,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NaverCategoryUploadService {
     private static final String HEADER_CATEGORY_CODE = "카테고리코드";
     private static final String HEADER_LEVEL1 = "1차카테";
@@ -51,30 +53,47 @@ public class NaverCategoryUploadService {
         validateFile(file);
 
         String filename = safeFilename(file.getOriginalFilename());
-        String uploadKey = String.valueOf(System.currentTimeMillis());
-        Path versionDir = uploadRoot().resolve("naver-categories").resolve("versions").resolve(uploadKey);
-        Path uploadedFilePath = versionDir.resolve(filename).normalize();
-        Path csvFilePath = uploadRoot().resolve("naver-categories").resolve("active").resolve("naver_categories.csv").normalize();
+        String versionTimestamp = String.valueOf(System.currentTimeMillis());
+        Path versionDir = uploadRoot()
+                .resolve("naver-categories")
+                .resolve("versions")
+                .resolve(versionTimestamp);
+        Path uploadedFilePath = versionDir
+                .resolve(filename)
+                .normalize();
+        Path csvFilePath = uploadRoot()
+                .resolve("naver-categories")
+                .resolve("active")
+                .resolve("naver_categories.csv")
+                .normalize();
 
         try {
             Files.createDirectories(versionDir);
             Files.createDirectories(csvFilePath.getParent());
             file.transferTo(uploadedFilePath);
 
-            List<NaverCategory> categories = parseCategories(uploadedFilePath);
+            NaverCategoryParseResult parseResult = parseCategories(uploadedFilePath);
+            List<NaverCategory> categories = parseResult.categories();
             if (categories.isEmpty()) {
-                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Naver category file has no category rows.");
+                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일에 유효한 카테고리 행이 없습니다.");
             }
 
-            naverCategoryVersionRepository.deactivateActiveVersions();
-            NaverCategoryVersion version = naverCategoryVersionRepository.save(new NaverCategoryVersion(
-                    filename,
+            log.info(
+                    "네이버 카테고리 파일 해석 완료: 전체 행={}, 유효 카테고리={}, 잘못된 행={}, 중복 코드={}",
+                    parseResult.sourceRowCount(),
                     categories.size(),
+                    parseResult.invalidRowCount(),
+                    parseResult.duplicateRowCount()
+            );
+
+            naverCategoryVersionRepository.deactivateActiveVersions();
+            NaverCategoryVersion version = naverCategoryVersionRepository.save(NaverCategoryVersion.createActive(
+                    filename,
+                    parseResult.sourceRowCount(),
                     categories.size(),
                     uploadedFilePath.toString(),
                     csvFilePath.toString(),
-                    Instant.now(),
-                    true
+                    Instant.now()
             ));
 
             for (NaverCategory category : categories) {
@@ -84,30 +103,35 @@ public class NaverCategoryUploadService {
             writeCsv(csvFilePath, categories);
             categoryMatcherService.rebuildEmbeddings(version.getId());
             return version;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Failed to upload Naver category file.");
+        } catch (IOException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_NAVER_CATEGORY_FILE,
+                    "네이버 카테고리 파일을 업로드하지 못했습니다."
+            );
         }
     }
 
-    private List<NaverCategory> parseCategories(Path filePath) {
+    private NaverCategoryParseResult parseCategories(Path filePath) {
         try (Workbook workbook = WorkbookFactory.create(filePath.toFile())) {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Naver category header row is empty.");
+                throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일의 헤더 행이 비어 있습니다.");
             }
 
             Map<String, Integer> headerIndexes = resolveHeaderIndexes(headerRow);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             Map<String, NaverCategory> categoriesByCode = new LinkedHashMap<>();
+            int sourceRowCount = 0;
+            int invalidRowCount = 0;
+            int duplicateRowCount = 0;
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
                 }
+                sourceRowCount++;
 
                 String categoryCode = readCell(row, headerIndexes.get(HEADER_CATEGORY_CODE), formatter);
                 String level1 = readCell(row, headerIndexes.get(HEADER_LEVEL1), formatter);
@@ -116,16 +140,24 @@ public class NaverCategoryUploadService {
                 String level4 = readCell(row, headerIndexes.get(HEADER_LEVEL4), formatter);
 
                 if (categoryCode.isBlank() || level1.isBlank()) {
+                    invalidRowCount++;
                     continue;
                 }
 
                 NaverCategory category = createCategory(categoryCode, level1, level2, level3, level4);
-                categoriesByCode.put(category.getCategoryCode(), category);
+                if (categoriesByCode.put(category.getCategoryCode(), category) != null) {
+                    duplicateRowCount++;
+                }
             }
 
-            return new ArrayList<>(categoriesByCode.values());
+            return new NaverCategoryParseResult(
+                    sourceRowCount,
+                    invalidRowCount,
+                    duplicateRowCount,
+                    new ArrayList<>(categoriesByCode.values())
+            );
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Failed to parse Naver category file.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일을 해석하지 못했습니다.");
         }
     }
 
@@ -147,7 +179,7 @@ public class NaverCategoryUploadService {
 
     private void requireHeader(Map<String, Integer> indexes, String header) {
         if (!indexes.containsKey(header)) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Required header missing: " + header);
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "필수 헤더가 없습니다: " + header);
         }
     }
 
@@ -195,12 +227,12 @@ public class NaverCategoryUploadService {
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Please upload a Naver category excel file.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 엑셀 파일을 업로드해 주세요.");
         }
 
         String filename = file.getOriginalFilename();
         if (filename == null || !isExcelFilename(filename)) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "Invalid Naver category excel file format.");
+            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 엑셀 파일 형식이 올바르지 않습니다.");
         }
     }
 
@@ -218,5 +250,13 @@ public class NaverCategoryUploadService {
 
     private Path uploadRoot() {
         return Path.of(uploadDir).toAbsolutePath().normalize();
+    }
+
+    private record NaverCategoryParseResult(
+            int sourceRowCount,
+            int invalidRowCount,
+            int duplicateRowCount,
+            List<NaverCategory> categories
+    ) {
     }
 }
