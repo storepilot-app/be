@@ -103,10 +103,11 @@ public class NaverCategoryUploadService {
             writeCsv(csvFilePath, categories);
             categoryMatcherService.rebuildEmbeddings(version.getId());
             return version;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "네이버 카테고리 파일을 업로드하지 못했습니다.");
+        } catch (IOException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_NAVER_CATEGORY_FILE,
+                    "네이버 카테고리 파일을 업로드하지 못했습니다."
+            );
         }
     }
 
