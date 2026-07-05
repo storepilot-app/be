@@ -51,10 +51,19 @@ public class NaverCategoryUploadService {
         validateFile(file);
 
         String filename = safeFilename(file.getOriginalFilename());
-        String uploadKey = String.valueOf(System.currentTimeMillis());
-        Path versionDir = uploadRoot().resolve("naver-categories").resolve("versions").resolve(uploadKey);
-        Path uploadedFilePath = versionDir.resolve(filename).normalize();
-        Path csvFilePath = uploadRoot().resolve("naver-categories").resolve("active").resolve("naver_categories.csv").normalize();
+        String versionTimestamp = String.valueOf(System.currentTimeMillis());
+        Path versionDir = uploadRoot()
+                .resolve("naver-categories")
+                .resolve("versions")
+                .resolve(versionTimestamp);
+        Path uploadedFilePath = versionDir
+                .resolve(filename)
+                .normalize();
+        Path csvFilePath = uploadRoot()
+                .resolve("naver-categories")
+                .resolve("active")
+                .resolve("naver_categories.csv")
+                .normalize();
 
         try {
             Files.createDirectories(versionDir);
