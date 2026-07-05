@@ -76,14 +76,13 @@ public class NaverCategoryUploadService {
             }
 
             naverCategoryVersionRepository.deactivateActiveVersions();
-            NaverCategoryVersion version = naverCategoryVersionRepository.save(new NaverCategoryVersion(
+            NaverCategoryVersion version = naverCategoryVersionRepository.save(NaverCategoryVersion.createActive(
                     filename,
                     categories.size(),
                     categories.size(),
                     uploadedFilePath.toString(),
                     csvFilePath.toString(),
-                    Instant.now(),
-                    true
+                    Instant.now()
             ));
 
             for (NaverCategory category : categories) {
