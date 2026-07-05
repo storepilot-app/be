@@ -6,10 +6,6 @@ import com.be.navercategory.dto.NaverCategoryUploadResponse;
 import com.be.navercategory.service.NaverCategoryUploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -28,33 +24,7 @@ public class NaverCategoryController {
 
     @Operation(
             summary = "네이버 카테고리 엑셀 업로드",
-            description = "네이버 카테고리 엑셀을 해석하여 새 버전을 활성화하고 CSV 캐시와 카테고리 임베딩을 재생성합니다.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "업로드 성공",
-                            content = @Content(
-                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = CommonResponse.class),
-                                    examples = @ExampleObject(value = """
-                                            {
-                                              "success": true,
-                                              "data": {
-                                                "versionId": 1,
-                                                "sourceFilename": "naver_categories.xlsx",
-                                                "rowCount": 5009,
-                                                "categoryCount": 5009,
-                                                "csvPath": "C:/Project/StorePilot/be/uploads/naver-categories/active/naver_categories.csv",
-                                                "message": "네이버 카테고리가 업로드되었습니다."
-                                              },
-                                              "message": "네이버 카테고리가 업로드되었습니다.",
-                                              "code": null,
-                                              "errors": null
-                                            }
-                                            """)
-                            )
-                    )
-            }
+            description = "네이버 카테고리 엑셀을 해석하여 새 버전을 활성화하고 CSV 캐시와 카테고리 임베딩을 재생성합니다."
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<NaverCategoryUploadResponse> upload(
