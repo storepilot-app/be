@@ -17,10 +17,14 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "my_category_mappings",
         indexes = {
-                @Index(name = "idx_my_category_mappings_user_key", columnList = "user_key"),
-                @Index(name = "idx_my_category_mappings_version_id", columnList = "version_id"),
-                @Index(name = "idx_my_category_mappings_my_category_code", columnList = "my_category_code"),
-                @Index(name = "idx_my_category_mappings_naver_category_code", columnList = "naver_category_code")
+                @Index(
+                        name = "idx_my_category_mappings_user_version",
+                        columnList = "user_key, version_id"
+                ),
+                @Index(
+                        name = "idx_my_category_mappings_user_naver_code",
+                        columnList = "user_key, naver_category_code"
+                )
         },
         uniqueConstraints = {
                 @UniqueConstraint(
@@ -56,7 +60,7 @@ public class MyCategoryMapping {
     @Column(name = "naver_category_full_path", length = 500)
     private String naverCategoryFullPath;
 
-    public MyCategoryMapping(
+    private MyCategoryMapping(
             Long versionId,
             String userKey,
             String myCategoryCode,
@@ -72,6 +76,25 @@ public class MyCategoryMapping {
         this.naverCategoryId = naverCategoryId;
         this.naverCategoryCode = naverCategoryCode;
         this.naverCategoryFullPath = naverCategoryFullPath;
+    }
+
+    public static MyCategoryMapping create(
+            String userKey,
+            String myCategoryCode,
+            String naverCategoryValue,
+            Long naverCategoryId,
+            String naverCategoryCode,
+            String naverCategoryFullPath
+    ) {
+        return new MyCategoryMapping(
+                null,
+                userKey,
+                myCategoryCode,
+                naverCategoryValue,
+                naverCategoryId,
+                naverCategoryCode,
+                naverCategoryFullPath
+        );
     }
 
     public void assignVersionId(Long versionId) {

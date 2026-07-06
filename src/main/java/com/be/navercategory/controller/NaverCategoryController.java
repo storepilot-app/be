@@ -32,14 +32,7 @@ public class NaverCategoryController {
             @RequestParam("file") MultipartFile file
     ) {
         NaverCategoryVersion version = naverCategoryUploadService.upload(file);
-        NaverCategoryUploadResponse response = new NaverCategoryUploadResponse(
-                version.getId(),
-                version.getSourceFilename(),
-                version.getRowCount(),
-                version.getCategoryCount(),
-                version.getCsvFilePath(),
-                "네이버 카테고리가 업로드되었습니다."
-        );
+        NaverCategoryUploadResponse response = NaverCategoryUploadResponse.from(version);
         return CommonResponse.success(response, response.message());
     }
 }

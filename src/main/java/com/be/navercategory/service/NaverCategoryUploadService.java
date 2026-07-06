@@ -51,7 +51,6 @@ public class NaverCategoryUploadService {
     @Transactional
     public NaverCategoryVersion upload(MultipartFile file) {
         validateFile(file);
-
         String filename = safeFilename(file.getOriginalFilename());
         String versionTimestamp = String.valueOf(System.currentTimeMillis());
         Path versionDir = uploadRoot()
@@ -144,7 +143,7 @@ public class NaverCategoryUploadService {
                     continue;
                 }
 
-                NaverCategory category = createCategory(categoryCode, level1, level2, level3, level4);
+                NaverCategory category = NaverCategory.create(categoryCode, level1, level2, level3, level4);
                 if (categoriesByCode.put(category.getCategoryCode(), category) != null) {
                     duplicateRowCount++;
                 }
@@ -181,16 +180,6 @@ public class NaverCategoryUploadService {
         if (!indexes.containsKey(header)) {
             throw new BusinessException(ErrorCode.INVALID_NAVER_CATEGORY_FILE, "필수 헤더가 없습니다: " + header);
         }
-    }
-
-    private NaverCategory createCategory(String categoryCode, String level1, String level2, String level3, String level4) {
-        List<String> levels = List.of(level1, level2, level3, level4).stream()
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .toList();
-        String fullPath = String.join(" > ", levels);
-        String searchText = String.join(" ", levels);
-        return new NaverCategory(null, categoryCode, level1, level2, level3, level4, fullPath, searchText);
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
