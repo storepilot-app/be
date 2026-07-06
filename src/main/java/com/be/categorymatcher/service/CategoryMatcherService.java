@@ -15,10 +15,8 @@ import com.be.navercategory.repository.NaverCategoryVersionRepository;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Comparator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -31,62 +29,6 @@ public class CategoryMatcherService {
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
-
-    public MyCategoryMatchResult findMyCategoryCode(String productName, String userKey) {
-        if (productName == null || productName.isBlank() || userKey == null || userKey.isBlank()) {
-            return MyCategoryMatchResult.noCategoryMatch();
-        }
-
-        Optional<NaverCategoryVersion> activeVersion = naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc();
-        if (activeVersion.isEmpty()) {
-            return MyCategoryMatchResult.noCategoryMatch();
-        }
-
-        List<NaverCategory> categories = naverCategoryRepository.findByVersionId(activeVersion.get().getId());
-        // Rule-based matching is temporarily disabled to inspect AI category scores.
-        Optional<CategoryMatchContext> matchContext = findByAi(
-                activeVersion.get().getId(),
-                productName,
-                categories
-        );
-//        Optional<CategoryMatchContext> matchContext = findByRule(productName, categories)
-//                .or(() -> findByAi(activeVersion.get().getId(), productName, categories));
-
-        if (matchContext.isEmpty()) {
-            return MyCategoryMatchResult.noCategoryMatch();
-        }
-
-        NaverCategory category = matchContext.get().category();
-        List<CategoryMatchCandidate> topNaverCategoryCandidates = matchContext.get().topNaverCategoryCandidates();
-        String llmSelectedCategory = matchContext.get().llmSelectedCategory();
-        String llmStatus = matchContext.get().llmStatus();
-        String llmStatusDetail = matchContext.get().llmStatusDetail();
-        List<CategoryMatchSimilarProduct> similarProducts = matchContext.get().similarProducts();
-
-        if (category == null) {
-            return MyCategoryMatchResult
-                    .noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus, llmStatusDetail)
-                    .withSimilarProducts(similarProducts);
-        }
-
-        MyCategoryMatchResult result = findMapping(userKey.trim(), category)
-                .map(mapping -> MyCategoryMatchResult.matched(
-                        mapping.getMyCategoryCode(),
-                        category.getFullPath(),
-                        topNaverCategoryCandidates,
-                        llmSelectedCategory,
-                        llmStatus,
-                        llmStatusDetail
-                ))
-                .orElseGet(() -> MyCategoryMatchResult.noMyCategoryMapping(
-                        category.getFullPath(),
-                        topNaverCategoryCandidates,
-                        llmSelectedCategory,
-                        llmStatus,
-                        llmStatusDetail
-                ));
-        return result.withSimilarProducts(similarProducts);
-    }
 
     public Map<Integer, MyCategoryMatchResult> findMyCategoryCodes(
             List<CategoryMatchProductRequest> products,
@@ -182,74 +124,6 @@ public class CategoryMatcherService {
         return activeVersion.map(NaverCategoryVersion::getId);
     }
 
-    private Optional<CategoryMatchContext> findByRule(String productName, List<NaverCategory> categories) {
-        String normalizedProductName = normalize(preprocessProductName(productName));
-        List<NaverCategory> candidates = categories.stream()
-                .filter(category -> !bestRuleKeyword(category).isBlank())
-                .filter(category -> normalizedProductName.contains(normalize(bestRuleKeyword(category))))
-                .sorted(Comparator.comparingInt((NaverCategory category) -> normalize(bestRuleKeyword(category)).length()).reversed())
-                .limit(10)
-                .toList();
-
-        if (candidates.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(new CategoryMatchContext(
-                candidates.get(0),
-                toCandidates(candidates),
-                null,
-                "SKIPPED",
-                null,
-                List.of()
-        ));
-    }
-
-    private String bestRuleKeyword(NaverCategory category) {
-        if (category.getLevel4() != null && !category.getLevel4().isBlank()) {
-            return category.getLevel4();
-        }
-        if (category.getLevel3() != null && !category.getLevel3().isBlank()) {
-            return category.getLevel3();
-        }
-        if (category.getLevel2() != null && !category.getLevel2().isBlank()) {
-            return category.getLevel2();
-        }
-        return category.getLevel1();
-    }
-
-    private Optional<CategoryMatchContext> findByAi(
-            Long versionId,
-            String productName,
-            List<NaverCategory> categories
-    ) {
-        List<CategoryMatchProductRequest> products = List.of(new CategoryMatchProductRequest(1, productName));
-        Optional<CategoryMatchContext> firstResult = predictByAi(versionId, products, categories);
-        if (firstResult.isPresent()) {
-            return firstResult;
-        }
-
-        categoryMatcherAiClient.rebuild(versionId, categories);
-        return predictByAi(versionId, products, categories);
-    }
-
-    private Optional<CategoryMatchContext> predictByAi(
-            Long versionId,
-            List<CategoryMatchProductRequest> products,
-            List<NaverCategory> categories
-    ) {
-        return categoryMatcherAiClient.predict(versionId, products)
-                .flatMap(response -> response.results().stream().findFirst())
-                .map(prediction -> new CategoryMatchContext(
-                        findCategoryFromPrediction(categories, prediction).orElse(null),
-                        topCandidates(prediction),
-                        Boolean.TRUE.equals(prediction.llmUsed()) ? prediction.llmSelectedCategory() : null,
-                        prediction.llmStatus(),
-                        prediction.llmStatusDetail(),
-                        similarProducts(prediction)
-                ));
-    }
-
     private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products,
@@ -305,32 +179,12 @@ public class CategoryMatcherService {
         return prediction.similarProducts() == null ? List.of() : prediction.similarProducts();
     }
 
-    private List<CategoryMatchCandidate> toCandidates(List<NaverCategory> categories) {
-        return categories.stream()
-                .filter(category -> category.getFullPath() != null && !category.getFullPath().isBlank())
-                .map(category -> new CategoryMatchCandidate(
-                        category.getId(),
-                        category.getCategoryCode(),
-                        category.getFullPath(),
-                        1.0
-                ))
-                .limit(10)
-                .toList();
-    }
-
     private Optional<NaverCategory> findCategoryFromPrediction(List<NaverCategory> categories, CategoryMatchPrediction prediction) {
         return categories.stream()
                 .filter(category -> prediction.categoryId() != null && prediction.categoryId().equals(category.getId())
                         || prediction.categoryCode() != null && prediction.categoryCode().equals(category.getCategoryCode())
                         || prediction.fullPath() != null && prediction.fullPath().equals(category.getFullPath()))
                 .findFirst();
-    }
-
-    private String preprocessProductName(String productName) {
-        return productName
-                .replaceAll("\\([^)]*\\)|（[^）]*）", " ")
-                .replaceAll("\\d+", " ")
-                .replaceAll("[()（）]", " ");
     }
 
     private Optional<MyCategoryMapping> findMapping(String userKey, NaverCategory naverCategory) {
@@ -340,20 +194,4 @@ public class CategoryMatcherService {
         );
     }
 
-    private String normalize(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.toLowerCase(Locale.ROOT).replaceAll("[\\s_/(),\\[\\]>-]+", "");
-    }
-
-    private record CategoryMatchContext(
-            NaverCategory category,
-            List<CategoryMatchCandidate> topNaverCategoryCandidates,
-            String llmSelectedCategory,
-            String llmStatus,
-            String llmStatusDetail,
-            List<CategoryMatchSimilarProduct> similarProducts
-    ) {
-    }
 }
