@@ -94,8 +94,7 @@ public class MyCategoryMappingUploadService {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
-            Optional<Long> activeNaverVersionId = naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc()
-                    .map(NaverCategoryVersion::getId);
+            Map<String, NaverCategory> naverCategoriesByCode = loadActiveNaverCategoriesByCode();
             int sourceRowCount = 0;
             int invalidRowCount = 0;
             int duplicateRowCount = 0;
@@ -115,16 +114,15 @@ public class MyCategoryMappingUploadService {
                     continue;
                 }
 
-                Optional<NaverCategory> naverCategory = activeNaverVersionId
-                        .flatMap(versionId -> findNaverCategoryByCode(versionId, naverCategoryCode));
+                NaverCategory naverCategory = naverCategoriesByCode.get(naverCategoryCode);
 
                 MyCategoryMapping mapping = MyCategoryMapping.create(
                         userKey,
                         myCategoryCode,
                         naverCategoryCode,
-                        naverCategory.map(NaverCategory::getId).orElse(null),
-                        naverCategory.map(NaverCategory::getCategoryCode).orElse(null),
-                        naverCategory.map(NaverCategory::getFullPath).orElse(null)
+                        naverCategory == null ? null : naverCategory.getId(),
+                        naverCategory == null ? null : naverCategory.getCategoryCode(),
+                        naverCategory == null ? null : naverCategory.getFullPath()
                 );
                 if (mappingsByMyCategory.put(myCategoryCode, mapping) != null) {
                     duplicateRowCount++;
@@ -142,8 +140,17 @@ public class MyCategoryMappingUploadService {
         }
     }
 
-    private Optional<NaverCategory> findNaverCategoryByCode(Long versionId, String naverCategoryCode) {
-        return naverCategoryRepository.findFirstByVersionIdAndCategoryCode(versionId, naverCategoryCode);
+    private Map<String, NaverCategory> loadActiveNaverCategoriesByCode() {
+        Optional<NaverCategoryVersion> activeVersion = naverCategoryVersionRepository
+                .findFirstByActiveTrueOrderByUploadedAtDesc();
+        if (activeVersion.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, NaverCategory> categoriesByCode = new LinkedHashMap<>();
+        naverCategoryRepository.findByVersionId(activeVersion.get().getId())
+                .forEach(category -> categoriesByCode.putIfAbsent(category.getCategoryCode(), category));
+        return categoriesByCode;
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
