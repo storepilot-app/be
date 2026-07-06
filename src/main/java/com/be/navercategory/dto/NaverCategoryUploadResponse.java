@@ -1,5 +1,6 @@
 package com.be.navercategory.dto;
 
+import com.be.navercategory.domain.NaverCategoryVersion;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "네이버 카테고리 업로드 결과")
@@ -17,4 +18,14 @@ public record NaverCategoryUploadResponse(
         @Schema(description = "처리 결과 메시지", example = "네이버 카테고리가 업로드되었습니다.")
         String message
 ) {
+    public static NaverCategoryUploadResponse from(NaverCategoryVersion version) {
+        return new NaverCategoryUploadResponse(
+                version.getId(),
+                version.getSourceFilename(),
+                version.getRowCount(),
+                version.getCategoryCount(),
+                version.getCsvFilePath(),
+                "네이버 카테고리가 업로드되었습니다."
+        );
+    }
 }
