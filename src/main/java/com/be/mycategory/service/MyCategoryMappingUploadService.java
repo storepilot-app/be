@@ -45,10 +45,10 @@ public class MyCategoryMappingUploadService {
     @Transactional
     public MyCategoryMappingVersion upload(MultipartFile file, String userKey) {
         validateFile(file);
-        String normalizedUserKey = validateAndTrimUserKey(userKey);
+        String trimmedUserKey = validateAndTrimUserKey(userKey);
         String filename = safeFilename(file.getOriginalFilename());
 
-        MyCategoryMappingParseResult parseResult = parseMappings(file, normalizedUserKey);
+        MyCategoryMappingParseResult parseResult = parseMappings(file, trimmedUserKey);
         List<MyCategoryMapping> mappings = parseResult.mappings();
         if (mappings.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
@@ -67,9 +67,9 @@ public class MyCategoryMappingUploadService {
                 matchedCount
         );
 
-        replaceExistingMappings(normalizedUserKey);
+        replaceExistingMappings(trimmedUserKey);
         MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(MyCategoryMappingVersion.createActive(
-                normalizedUserKey,
+                trimmedUserKey,
                 filename,
                 parseResult.sourceRowCount(),
                 mappings.size(),
