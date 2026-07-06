@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -31,6 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MyCategoryMappingUploadService {
     private static final int MY_CATEGORY_COLUMN_INDEX = 0;
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 7;
@@ -46,7 +48,8 @@ public class MyCategoryMappingUploadService {
         String normalizedUserKey = validateAndTrimUserKey(userKey);
         String filename = safeFilename(file.getOriginalFilename());
 
-        List<MyCategoryMapping> mappings = parseMappings(file, normalizedUserKey);
+        MyCategoryMappingParseResult parseResult = parseMappings(file, normalizedUserKey);
+        List<MyCategoryMapping> mappings = parseResult.mappings();
         if (mappings.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
         }
@@ -55,11 +58,20 @@ public class MyCategoryMappingUploadService {
                 .filter(mapping -> mapping.getNaverCategoryId() != null)
                 .count();
 
+        log.info(
+                "마이카테고리 매핑 파일 해석 완료: 전체 행={}, 유효 매핑={}, 잘못된 행={}, 중복 코드={}, 네이버 카테고리 일치={}",
+                parseResult.sourceRowCount(),
+                mappings.size(),
+                parseResult.invalidRowCount(),
+                parseResult.duplicateRowCount(),
+                matchedCount
+        );
+
         replaceExistingMappings(normalizedUserKey);
         MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(MyCategoryMappingVersion.createActive(
                 normalizedUserKey,
                 filename,
-                mappings.size(),
+                parseResult.sourceRowCount(),
                 mappings.size(),
                 matchedCount,
                 Instant.now()
@@ -77,23 +89,28 @@ public class MyCategoryMappingUploadService {
         myCategoryMappingVersionRepository.deleteByUserKey(userKey);
     }
 
-    private List<MyCategoryMapping> parseMappings(MultipartFile file, String userKey) {
+    private MyCategoryMappingParseResult parseMappings(MultipartFile file, String userKey) {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
             Optional<Long> activeNaverVersionId = naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc()
                     .map(NaverCategoryVersion::getId);
+            int sourceRowCount = 0;
+            int invalidRowCount = 0;
+            int duplicateRowCount = 0;
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
                 }
+                sourceRowCount++;
 
                 String myCategoryCode = readCell(row, MY_CATEGORY_COLUMN_INDEX, formatter);
                 String naverCategoryValue = readCell(row, NAVER_CATEGORY_COLUMN_INDEX, formatter);
                 if (myCategoryCode.isBlank() || naverCategoryValue.isBlank()) {
+                    invalidRowCount++;
                     continue;
                 }
 
@@ -108,10 +125,17 @@ public class MyCategoryMappingUploadService {
                         naverCategory.map(NaverCategory::getCategoryCode).orElse(null),
                         naverCategory.map(NaverCategory::getFullPath).orElse(null)
                 );
-                mappingsByMyCategory.put(myCategoryCode, mapping);
+                if (mappingsByMyCategory.put(myCategoryCode, mapping) != null) {
+                    duplicateRowCount++;
+                }
             }
 
-            return new ArrayList<>(mappingsByMyCategory.values());
+            return new MyCategoryMappingParseResult(
+                    sourceRowCount,
+                    invalidRowCount,
+                    duplicateRowCount,
+                    new ArrayList<>(mappingsByMyCategory.values())
+            );
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일을 해석하지 못했습니다.");
         }
@@ -162,5 +186,13 @@ public class MyCategoryMappingUploadService {
             return "my_category_mappings.xlsx";
         }
         return filename.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private record MyCategoryMappingParseResult(
+            int sourceRowCount,
+            int invalidRowCount,
+            int duplicateRowCount,
+            List<MyCategoryMapping> mappings
+    ) {
     }
 }
