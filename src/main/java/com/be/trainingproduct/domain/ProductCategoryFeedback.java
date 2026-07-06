@@ -17,8 +17,8 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "product_category_feedback",
         indexes = {
-                @Index(name = "idx_product_feedback_user_created", columnList = "user_key, created_at"),
-                @Index(name = "idx_product_feedback_my_category", columnList = "user_key, my_category_code")
+                @Index(name = "idx_product_feedback_user_created", columnList = "user_key, created_at"), //사용자별 피드백 이력을 최신순으로 조회할 때 유용
+                @Index(name = "idx_product_feedback_my_category", columnList = "user_key, my_category_code") //사용자마다 번호 체계가 다르므로 user_key와 함께 조회
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
