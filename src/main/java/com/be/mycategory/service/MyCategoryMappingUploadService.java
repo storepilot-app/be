@@ -17,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -47,8 +46,13 @@ public class MyCategoryMappingUploadService {
         validateFile(file);
         String trimmedUserKey = validateAndTrimUserKey(userKey);
         String filename = safeFilename(file.getOriginalFilename());
+        Map<String, NaverCategory> naverCategoriesByCode = loadRequiredActiveNaverCategoriesByCode();
 
-        MyCategoryMappingParseResult parseResult = parseMappings(file, trimmedUserKey);
+        MyCategoryMappingParseResult parseResult = parseMappings(
+                file,
+                trimmedUserKey,
+                naverCategoriesByCode
+        );
         List<MyCategoryMapping> mappings = parseResult.mappings();
         if (mappings.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
@@ -89,12 +93,15 @@ public class MyCategoryMappingUploadService {
         myCategoryMappingVersionRepository.deleteByUserKey(userKey);
     }
 
-    private MyCategoryMappingParseResult parseMappings(MultipartFile file, String userKey) {
+    private MyCategoryMappingParseResult parseMappings(
+            MultipartFile file,
+            String userKey,
+            Map<String, NaverCategory> naverCategoriesByCode
+    ) {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
-            Map<String, NaverCategory> naverCategoriesByCode = loadActiveNaverCategoriesByCode();
             int sourceRowCount = 0;
             int invalidRowCount = 0;
             int duplicateRowCount = 0;
@@ -140,16 +147,23 @@ public class MyCategoryMappingUploadService {
         }
     }
 
-    private Map<String, NaverCategory> loadActiveNaverCategoriesByCode() {
-        Optional<NaverCategoryVersion> activeVersion = naverCategoryVersionRepository
-                .findFirstByActiveTrueOrderByUploadedAtDesc();
-        if (activeVersion.isEmpty()) {
-            return Map.of();
-        }
+    private Map<String, NaverCategory> loadRequiredActiveNaverCategoriesByCode() {
+        NaverCategoryVersion activeVersion = naverCategoryVersionRepository
+                .findFirstByActiveTrueOrderByUploadedAtDesc()
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE,
+                        "활성화된 네이버 카테고리 버전이 없습니다. 네이버 카테고리를 먼저 업로드해 주세요."
+                ));
 
         Map<String, NaverCategory> categoriesByCode = new LinkedHashMap<>();
-        naverCategoryRepository.findByVersionId(activeVersion.get().getId())
+        naverCategoryRepository.findByVersionId(activeVersion.getId())
                 .forEach(category -> categoriesByCode.putIfAbsent(category.getCategoryCode(), category));
+        if (categoriesByCode.isEmpty()) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE,
+                    "활성화된 네이버 카테고리 버전에 카테고리 데이터가 없습니다."
+            );
+        }
         return categoriesByCode;
     }
 
