@@ -43,7 +43,7 @@ public class MyCategoryMappingUploadService {
     @Transactional
     public MyCategoryMappingVersion upload(MultipartFile file, String userKey) {
         validateFile(file);
-        String normalizedUserKey = normalizeUserKey(userKey);
+        String normalizedUserKey = validateAndTrimUserKey(userKey);
         String filename = safeFilename(file.getOriginalFilename());
 
         List<MyCategoryMapping> mappings = parseMappings(file, normalizedUserKey);
@@ -147,7 +147,7 @@ public class MyCategoryMappingUploadService {
         }
     }
 
-    private String normalizeUserKey(String userKey) {
+    private String validateAndTrimUserKey(String userKey) {
         if (userKey == null || userKey.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "사용자 식별자는 필수입니다.");
         }
