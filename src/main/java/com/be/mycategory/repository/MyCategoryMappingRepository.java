@@ -12,8 +12,6 @@ public interface MyCategoryMappingRepository extends JpaRepository<MyCategoryMap
 
     Optional<MyCategoryMapping> findFirstByUserKeyAndNaverCategoryCode(String userKey, String naverCategoryCode);
 
-    Optional<MyCategoryMapping> findFirstByUserKeyAndNaverCategoryFullPath(String userKey, String naverCategoryFullPath);
-
     long countByVersionId(Long versionId);
 
     void deleteByUserKey(String userKey);

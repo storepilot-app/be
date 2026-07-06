@@ -17,10 +17,14 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "my_category_mappings",
         indexes = {
-                @Index(name = "idx_my_category_mappings_user_key", columnList = "user_key"),
-                @Index(name = "idx_my_category_mappings_version_id", columnList = "version_id"),
-                @Index(name = "idx_my_category_mappings_my_category_code", columnList = "my_category_code"),
-                @Index(name = "idx_my_category_mappings_naver_category_code", columnList = "naver_category_code")
+                @Index(
+                        name = "idx_my_category_mappings_user_version",
+                        columnList = "user_key, version_id"
+                ),
+                @Index(
+                        name = "idx_my_category_mappings_user_naver_code",
+                        columnList = "user_key, naver_category_code"
+                )
         },
         uniqueConstraints = {
                 @UniqueConstraint(

@@ -334,8 +334,10 @@ public class CategoryMatcherService {
     }
 
     private Optional<MyCategoryMapping> findMapping(String userKey, NaverCategory naverCategory) {
-        return myCategoryMappingRepository.findFirstByUserKeyAndNaverCategoryCode(userKey, naverCategory.getCategoryCode())
-                .or(() -> myCategoryMappingRepository.findFirstByUserKeyAndNaverCategoryFullPath(userKey, naverCategory.getFullPath()));
+        return myCategoryMappingRepository.findFirstByUserKeyAndNaverCategoryCode(
+                userKey,
+                naverCategory.getCategoryCode()
+        );
     }
 
     private String normalize(String value) {
