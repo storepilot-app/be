@@ -38,7 +38,7 @@ public class CategoryMatcherAiClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientException ignored) {
-            // AI server can be started later; rule matching still works without cached embeddings.
+            // AI 서버가 나중에 실행될 수 있으므로 임베딩 캐시 재생성 실패는 업로드 흐름을 막지 않는다.
         }
     }
 

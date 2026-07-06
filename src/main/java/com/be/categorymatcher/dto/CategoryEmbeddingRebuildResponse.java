@@ -2,11 +2,11 @@ package com.be.categorymatcher.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Category embedding rebuild response")
+@Schema(description = "카테고리 임베딩 재생성 요청 결과")
 public record CategoryEmbeddingRebuildResponse(
-        @Schema(description = "Active Naver category version ID", example = "1")
+        @Schema(description = "활성 네이버 카테고리 버전 ID", example = "1")
         Long versionId,
-        @Schema(description = "Response message", example = "Category embeddings rebuild requested.")
+        @Schema(description = "처리 결과 메시지", example = "카테고리 임베딩 재생성을 요청했습니다.")
         String message
 ) {
 }

@@ -16,18 +16,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/admin/category-matcher")
-@Tag(name = "Category Matcher", description = "Category matching AI cache API")
+@Tag(name = "카테고리 매처", description = "카테고리 분류용 AI 캐시 관리 API")
 @RequiredArgsConstructor
 public class CategoryMatcherAdminController {
     private final CategoryMatcherService categoryMatcherService;
 
     @Operation(
-            summary = "Rebuild active category embeddings",
-            description = "Requests the AI server to rebuild embeddings for the active Naver category version.",
+            summary = "활성 네이버 카테고리 임베딩 재생성",
+            description = "현재 활성화된 네이버 카테고리 버전을 기준으로 AI 서버의 카테고리 임베딩 캐시 재생성을 요청합니다.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "Rebuild requested",
+                            description = "재생성 요청 완료",
                             content = @Content(
                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                     schema = @Schema(implementation = CommonResponse.class)
@@ -40,7 +40,7 @@ public class CategoryMatcherAdminController {
         Long versionId = categoryMatcherService.rebuildActiveEmbeddings().orElse(null);
         CategoryEmbeddingRebuildResponse response = new CategoryEmbeddingRebuildResponse(
                 versionId,
-                versionId == null ? "No active Naver category version." : "Category embeddings rebuild requested."
+                versionId == null ? "활성화된 네이버 카테고리 버전이 없습니다." : "카테고리 임베딩 재생성을 요청했습니다."
         );
         return CommonResponse.success(response, response.message());
     }
