@@ -5,8 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,9 +16,11 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
         name = "naver_categories",
-        indexes = {
-                @Index(name = "idx_naver_categories_version_id", columnList = "version_id"),
-                @Index(name = "idx_naver_categories_category_code", columnList = "category_code")
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_naver_categories_version_code",
+                        columnNames = {"version_id", "category_code"}
+                )
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

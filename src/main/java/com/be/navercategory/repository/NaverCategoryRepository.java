@@ -10,7 +10,5 @@ public interface NaverCategoryRepository extends JpaRepository<NaverCategory, Lo
 
     Optional<NaverCategory> findFirstByVersionIdAndCategoryCode(Long versionId, String categoryCode);
 
-    Optional<NaverCategory> findFirstByVersionIdAndFullPath(Long versionId, String fullPath);
-
     long countByVersionId(Long versionId);
 }

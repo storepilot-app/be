@@ -108,19 +108,19 @@ public class MyCategoryMappingUploadService {
                 sourceRowCount++;
 
                 String myCategoryCode = readCell(row, MY_CATEGORY_COLUMN_INDEX, formatter);
-                String naverCategoryValue = readCell(row, NAVER_CATEGORY_COLUMN_INDEX, formatter);
-                if (myCategoryCode.isBlank() || naverCategoryValue.isBlank()) {
+                String naverCategoryCode = readCell(row, NAVER_CATEGORY_COLUMN_INDEX, formatter);
+                if (myCategoryCode.isBlank() || naverCategoryCode.isBlank()) {
                     invalidRowCount++;
                     continue;
                 }
 
                 Optional<NaverCategory> naverCategory = activeNaverVersionId
-                        .flatMap(versionId -> findNaverCategory(versionId, naverCategoryValue));
+                        .flatMap(versionId -> findNaverCategoryByCode(versionId, naverCategoryCode));
 
                 MyCategoryMapping mapping = MyCategoryMapping.create(
                         userKey,
                         myCategoryCode,
-                        naverCategoryValue,
+                        naverCategoryCode,
                         naverCategory.map(NaverCategory::getId).orElse(null),
                         naverCategory.map(NaverCategory::getCategoryCode).orElse(null),
                         naverCategory.map(NaverCategory::getFullPath).orElse(null)
@@ -141,13 +141,8 @@ public class MyCategoryMappingUploadService {
         }
     }
 
-    private Optional<NaverCategory> findNaverCategory(Long versionId, String naverCategoryValue) {
-        return naverCategoryRepository.findFirstByVersionIdAndCategoryCode(versionId, naverCategoryValue)
-                .or(() -> naverCategoryRepository.findFirstByVersionIdAndFullPath(versionId, normalizeCategoryPath(naverCategoryValue)));
-    }
-
-    private String normalizeCategoryPath(String value) {
-        return value.replaceAll("\\s*>\\s*", " > ").trim();
+    private Optional<NaverCategory> findNaverCategoryByCode(Long versionId, String naverCategoryCode) {
+        return naverCategoryRepository.findFirstByVersionIdAndCategoryCode(versionId, naverCategoryCode);
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {

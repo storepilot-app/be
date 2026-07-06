@@ -28,13 +28,13 @@ public class MyCategoryMappingController {
 
     @Operation(
             summary = "마이카테고리 매핑 엑셀 업로드",
-            description = "매핑 엑셀의 A열(마이카테고리)과 H열(네이버 카테고리)을 읽어 사용자별 1:1 매핑으로 저장합니다."
+            description = "매핑 엑셀의 A열(마이카테고리)과 H열(네이버 카테고리 코드)을 읽어 사용자별 1:1 매핑으로 저장합니다."
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<MyCategoryMappingUploadResponse> upload(
             @Parameter(description = "사용자별 마이카테고리 번호 체계를 구분할 사용자 식별자", example = "user-a", required = true)
             @RequestParam("userKey") String userKey,
-            @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). A열은 마이카테고리, H열은 네이버 카테고리입니다.", required = true)
+            @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). A열은 마이카테고리, H열은 네이버 카테고리 코드입니다.", required = true)
             @RequestParam("file") MultipartFile file
     ) {
         MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, userKey);
