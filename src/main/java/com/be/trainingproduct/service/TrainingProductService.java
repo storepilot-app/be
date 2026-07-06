@@ -79,11 +79,15 @@ public class TrainingProductService {
                 file == null
                         || file.isEmpty()
                         || file.getOriginalFilename() == null
-                        || !file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx")
+                        || !isExcelFilename(file.getOriginalFilename())
         );
         if (invalidFile) {
             throw invalid("기존 상품 파일은 비어 있지 않은 .xlsx 형식이어야 합니다.");
         }
+    }
+
+    private boolean isExcelFilename(String filename) {
+        return filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
     }
 
     private String validateAndTrimUserKey(String value) {
