@@ -51,7 +51,6 @@ public class NaverCategoryUploadService {
     @Transactional
     public NaverCategoryVersion upload(MultipartFile file) {
         validateFile(file);
-
         String filename = safeFilename(file.getOriginalFilename());
         String versionTimestamp = String.valueOf(System.currentTimeMillis());
         Path versionDir = uploadRoot()

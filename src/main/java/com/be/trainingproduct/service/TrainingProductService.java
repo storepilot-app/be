@@ -3,9 +3,7 @@ package com.be.trainingproduct.service;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.mycategory.domain.MyCategoryMapping;
-import com.be.mycategory.domain.MyCategoryMappingVersion;
-import com.be.mycategory.repository.MyCategoryMappingRepository;
-import com.be.mycategory.repository.MyCategoryMappingVersionRepository;
+import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.trainingproduct.domain.ProductCategoryFeedback;
 import com.be.trainingproduct.client.TrainingProductAiClient;
 import com.be.trainingproduct.dto.CategoryMatchMappingItem;
@@ -27,20 +25,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class TrainingProductService {
     private final TrainingProductAiClient trainingProductAiClient;
-    private final MyCategoryMappingRepository myCategoryMappingRepository;
-    private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
+    private final MyCategoryMappingQueryService myCategoryMappingQueryService;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
 
     public ProductIndexRebuildResponse rebuildIndex(String userKey, List<MultipartFile> files) {
         String trimmedUserKey = validateAndTrimUserKey(userKey);
         validateFiles(files);
-        MyCategoryMappingVersion activeMappingVersion = getRequiredActiveMappingVersion(trimmedUserKey);
-        List<CategoryMatchMappingItem> mappings = myCategoryMappingRepository
-                .findByUserKeyAndVersionId(trimmedUserKey, activeMappingVersion.getId())
+        List<CategoryMatchMappingItem> mappings = myCategoryMappingQueryService
+                .getResolvedMappings(trimmedUserKey)
                 .stream()
-                .filter(mapping -> mapping.getNaverCategoryId() != null)
-                .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
-                .filter(mapping -> mapping.getNaverCategoryFullPath() != null && !mapping.getNaverCategoryFullPath().isBlank())
                 .map(mapping -> new CategoryMatchMappingItem(
                         mapping.getMyCategoryCode(),
                         mapping.getNaverCategoryId(),
@@ -62,17 +55,8 @@ public class TrainingProductService {
         String userKey = validateAndTrimUserKey(request.userKey());
         String productName = required(request.productName(), "상품명은 필수입니다.");
         String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
-        MyCategoryMappingVersion activeMappingVersion = getRequiredActiveMappingVersion(userKey);
-        MyCategoryMapping mapping = myCategoryMappingRepository
-                .findFirstByUserKeyAndVersionIdAndMyCategoryCode(
-                        userKey,
-                        activeMappingVersion.getId(),
-                        myCategoryCode
-                )
-                .filter(item -> item.getNaverCategoryId() != null)
-                .filter(item -> item.getNaverCategoryCode() != null && !item.getNaverCategoryCode().isBlank())
-                .filter(item -> item.getNaverCategoryFullPath() != null && !item.getNaverCategoryFullPath().isBlank())
-                .orElseThrow(() -> invalid("마이카테고리 코드에 대응하는 네이버 카테고리 매핑이 없습니다."));
+        MyCategoryMapping mapping = myCategoryMappingQueryService
+                .getRequiredResolvedMapping(userKey, myCategoryCode);
 
         ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(new ProductCategoryFeedback(
                 userKey,
@@ -100,12 +84,6 @@ public class TrainingProductService {
                 aiResponse.indexedProductCount(),
                 "상품 카테고리 수정 피드백이 저장되었습니다."
         );
-    }
-
-    private MyCategoryMappingVersion getRequiredActiveMappingVersion(String userKey) {
-        return myCategoryMappingVersionRepository
-                .findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(userKey)
-                .orElseThrow(() -> invalid("상품 인덱스를 생성하기 전에 마이카테고리 매핑을 업로드해 주세요."));
     }
 
     private void validateFiles(List<MultipartFile> files) {
