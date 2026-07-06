@@ -58,17 +58,13 @@ public class MyCategoryMappingUploadService {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
         }
 
-        int matchedCount = (int) mappings.stream()
-                .filter(mapping -> mapping.getNaverCategoryId() != null)
-                .count();
-
         log.info(
                 "마이카테고리 매핑 파일 해석 완료: 전체 행={}, 유효 매핑={}, 잘못된 행={}, 중복 코드={}, 네이버 카테고리 일치={}",
                 parseResult.sourceRowCount(),
                 mappings.size(),
                 parseResult.invalidRowCount(),
                 parseResult.duplicateRowCount(),
-                matchedCount
+                parseResult.matchedCount()
         );
 
         replaceExistingMappings(trimmedUserKey);
@@ -77,7 +73,7 @@ public class MyCategoryMappingUploadService {
                 filename,
                 parseResult.sourceRowCount(),
                 mappings.size(),
-                matchedCount,
+                parseResult.matchedCount(),
                 Instant.now()
         ));
 
@@ -136,11 +132,16 @@ public class MyCategoryMappingUploadService {
                 }
             }
 
+            List<MyCategoryMapping> mappings = new ArrayList<>(mappingsByMyCategory.values());
+            int matchedCount = (int) mappings.stream()
+                    .filter(mapping -> mapping.getNaverCategoryId() != null)
+                    .count();
             return new MyCategoryMappingParseResult(
                     sourceRowCount,
                     invalidRowCount,
                     duplicateRowCount,
-                    new ArrayList<>(mappingsByMyCategory.values())
+                    matchedCount,
+                    mappings
             );
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일을 해석하지 못했습니다.");
@@ -222,6 +223,7 @@ public class MyCategoryMappingUploadService {
             int sourceRowCount,
             int invalidRowCount,
             int duplicateRowCount,
+            int matchedCount,
             List<MyCategoryMapping> mappings
     ) {
     }
