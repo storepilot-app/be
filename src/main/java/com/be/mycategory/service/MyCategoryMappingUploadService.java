@@ -58,14 +58,7 @@ public class MyCategoryMappingUploadService {
             throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
         }
 
-        log.info(
-                "마이카테고리 매핑 파일 해석 완료: 전체 행={}, 유효 매핑={}, 잘못된 행={}, 중복 코드={}, 네이버 카테고리 일치={}",
-                parseResult.sourceRowCount(),
-                mappings.size(),
-                parseResult.invalidRowCount(),
-                parseResult.duplicateRowCount(),
-                parseResult.matchedCount()
-        );
+        logParseResult(parseResult);
 
         replaceExistingMappings(trimmedUserKey);
         MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(MyCategoryMappingVersion.createActive(
@@ -87,6 +80,17 @@ public class MyCategoryMappingUploadService {
     private void replaceExistingMappings(String userKey) {
         myCategoryMappingRepository.deleteByUserKey(userKey);
         myCategoryMappingVersionRepository.deleteByUserKey(userKey);
+    }
+
+    private void logParseResult(MyCategoryMappingParseResult parseResult) {
+        log.info(
+                "마이카테고리 매핑 파일 해석 완료: 전체 행={}, 유효 매핑={}, 잘못된 행={}, 중복 코드={}, 네이버 카테고리 일치={}",
+                parseResult.sourceRowCount(),
+                parseResult.mappings().size(),
+                parseResult.invalidRowCount(),
+                parseResult.duplicateRowCount(),
+                parseResult.matchedCount()
+        );
     }
 
     private MyCategoryMappingParseResult parseMappings(
