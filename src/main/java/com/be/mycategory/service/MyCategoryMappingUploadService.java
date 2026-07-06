@@ -109,6 +109,7 @@ public class MyCategoryMappingUploadService {
 
                 String myCategoryCode = readCell(row, MY_CATEGORY_COLUMN_INDEX, formatter);
                 String naverCategoryCode = readCell(row, NAVER_CATEGORY_COLUMN_INDEX, formatter);
+                validateNaverCategoryCode(myCategoryCode, naverCategoryCode, rowIndex + 1);
                 if (myCategoryCode.isBlank() || naverCategoryCode.isBlank()) {
                     invalidRowCount++;
                     continue;
@@ -151,6 +152,19 @@ public class MyCategoryMappingUploadService {
             return "";
         }
         return formatter.formatCellValue(cell).trim();
+    }
+
+    private void validateNaverCategoryCode(
+            String myCategoryCode,
+            String naverCategoryCode,
+            int rowNumber
+    ) {
+        if (!myCategoryCode.isBlank() && naverCategoryCode.isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE,
+                    "H열에 네이버 카테고리 코드가 없습니다. 엑셀 행: " + rowNumber
+            );
+        }
     }
 
     private void validateFile(MultipartFile file) {
