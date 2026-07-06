@@ -52,7 +52,7 @@ public class MyCategoryMappingVersion {
     @Column(name = "active", nullable = false)
     private boolean active;
 
-    public MyCategoryMappingVersion(
+    private MyCategoryMappingVersion(
             String userKey,
             String sourceFilename,
             int rowCount,
@@ -69,5 +69,24 @@ public class MyCategoryMappingVersion {
         this.uploadedFilePath = ORIGINAL_FILE_NOT_STORED;
         this.uploadedAt = uploadedAt;
         this.active = active;
+    }
+
+    public static MyCategoryMappingVersion createActive(
+            String userKey,
+            String sourceFilename,
+            int rowCount,
+            int mappingCount,
+            int matchedCount,
+            Instant uploadedAt
+    ) {
+        return new MyCategoryMappingVersion(
+                userKey,
+                sourceFilename,
+                rowCount,
+                mappingCount,
+                matchedCount,
+                uploadedAt,
+                true
+        );
     }
 }

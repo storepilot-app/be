@@ -56,14 +56,13 @@ public class MyCategoryMappingUploadService {
                 .count();
 
         replaceExistingMappings(normalizedUserKey);
-        MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(new MyCategoryMappingVersion(
+        MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(MyCategoryMappingVersion.createActive(
                 normalizedUserKey,
                 filename,
                 mappings.size(),
                 mappings.size(),
                 matchedCount,
-                Instant.now(),
-                true
+                Instant.now()
         ));
 
         for (MyCategoryMapping mapping : mappings) {
@@ -101,8 +100,7 @@ public class MyCategoryMappingUploadService {
                 Optional<NaverCategory> naverCategory = activeNaverVersionId
                         .flatMap(versionId -> findNaverCategory(versionId, naverCategoryValue));
 
-                MyCategoryMapping mapping = new MyCategoryMapping(
-                        null,
+                MyCategoryMapping mapping = MyCategoryMapping.create(
                         userKey,
                         myCategoryCode,
                         naverCategoryValue,
