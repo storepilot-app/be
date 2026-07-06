@@ -48,7 +48,7 @@ public class ProductCategoryFeedback {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    public ProductCategoryFeedback(
+    private ProductCategoryFeedback(
             String userKey,
             String productName,
             String myCategoryCode,
@@ -64,5 +64,25 @@ public class ProductCategoryFeedback {
         this.naverCategoryCode = naverCategoryCode;
         this.naverCategoryFullPath = naverCategoryFullPath;
         this.createdAt = createdAt;
+    }
+
+    public static ProductCategoryFeedback create(
+            String userKey,
+            String productName,
+            String myCategoryCode,
+            Long naverCategoryId,
+            String naverCategoryCode,
+            String naverCategoryFullPath,
+            Instant createdAt
+    ) {
+        return new ProductCategoryFeedback(
+                userKey,
+                productName,
+                myCategoryCode,
+                naverCategoryId,
+                naverCategoryCode,
+                naverCategoryFullPath,
+                createdAt
+        );
     }
 }

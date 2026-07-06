@@ -34,12 +34,7 @@ public class TrainingProductService {
         List<CategoryMatchMappingItem> mappings = myCategoryMappingQueryService
                 .getResolvedMappings(trimmedUserKey)
                 .stream()
-                .map(mapping -> new CategoryMatchMappingItem(
-                        mapping.getMyCategoryCode(),
-                        mapping.getNaverCategoryId(),
-                        mapping.getNaverCategoryCode(),
-                        mapping.getNaverCategoryFullPath()
-                ))
+                .map(CategoryMatchMappingItem::from)
                 .toList();
         if (mappings.isEmpty()) {
             throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
@@ -58,7 +53,7 @@ public class TrainingProductService {
         MyCategoryMapping mapping = myCategoryMappingQueryService
                 .getRequiredResolvedMapping(userKey, myCategoryCode);
 
-        ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(new ProductCategoryFeedback(
+        ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
                 userKey,
                 productName,
                 myCategoryCode,
@@ -68,22 +63,9 @@ public class TrainingProductService {
                 Instant.now()
         ));
         ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
-                new ProductFeedbackAiRequest(
-                        userKey,
-                        productName,
-                        mapping.getNaverCategoryId(),
-                        mapping.getNaverCategoryCode(),
-                        mapping.getNaverCategoryFullPath()
-                )
+                ProductFeedbackAiRequest.from(feedback)
         );
-        return new ProductCategoryFeedbackResponse(
-                feedback.getId(),
-                userKey,
-                myCategoryCode,
-                mapping.getNaverCategoryFullPath(),
-                aiResponse.indexedProductCount(),
-                "상품 카테고리 수정 피드백이 저장되었습니다."
-        );
+        return ProductCategoryFeedbackResponse.from(feedback, aiResponse);
     }
 
     private void validateFiles(List<MultipartFile> files) {

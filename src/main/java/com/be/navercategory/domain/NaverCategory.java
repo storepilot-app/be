@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -50,7 +51,7 @@ public class NaverCategory {
     @Column(name = "search_text", nullable = false, length = 500)
     private String searchText;
 
-    public NaverCategory(
+    private NaverCategory(
             Long versionId,
             String categoryCode,
             String level1,
@@ -68,6 +69,29 @@ public class NaverCategory {
         this.level4 = level4;
         this.fullPath = fullPath;
         this.searchText = searchText;
+    }
+
+    public static NaverCategory create(
+            String categoryCode,
+            String level1,
+            String level2,
+            String level3,
+            String level4
+    ) {
+        List<String> levels = List.of(level1, level2, level3, level4).stream()
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+        return new NaverCategory(
+                null,
+                categoryCode,
+                level1,
+                level2,
+                level3,
+                level4,
+                String.join(" > ", levels),
+                String.join(" ", levels)
+        );
     }
 
     public void assignVersionId(Long versionId) {
