@@ -48,7 +48,7 @@ public class MyCategoryMappingUploadService {
 
         List<MyCategoryMapping> mappings = parseMappings(file, normalizedUserKey);
         if (mappings.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "My category mapping file has no mapping rows.");
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일에 유효한 매핑 행이 없습니다.");
         }
 
         int matchedCount = (int) mappings.stream()
@@ -115,7 +115,7 @@ public class MyCategoryMappingUploadService {
 
             return new ArrayList<>(mappingsByMyCategory.values());
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "Failed to parse my category mapping file.");
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 파일을 해석하지 못했습니다.");
         }
     }
 
@@ -138,18 +138,18 @@ public class MyCategoryMappingUploadService {
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "Please upload a my category mapping excel file.");
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 엑셀 파일을 업로드해 주세요.");
         }
 
         String filename = file.getOriginalFilename();
         if (filename == null || !isExcelFilename(filename)) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "Invalid my category mapping excel file format.");
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "마이카테고리 매핑 엑셀 파일 형식이 올바르지 않습니다.");
         }
     }
 
     private String normalizeUserKey(String userKey) {
         if (userKey == null || userKey.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "User key is required.");
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "사용자 식별자는 필수입니다.");
         }
         return userKey.trim();
     }
