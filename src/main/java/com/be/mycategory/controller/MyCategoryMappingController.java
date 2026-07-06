@@ -38,15 +38,7 @@ public class MyCategoryMappingController {
             @RequestParam("file") MultipartFile file
     ) {
         MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, userKey);
-        MyCategoryMappingUploadResponse response = new MyCategoryMappingUploadResponse(
-                version.getId(),
-                version.getUserKey(),
-                version.getSourceFilename(),
-                version.getRowCount(),
-                version.getMappingCount(),
-                version.getMatchedCount(),
-                "마이카테고리 매핑이 업로드되었습니다."
-        );
+        MyCategoryMappingUploadResponse response = MyCategoryMappingUploadResponse.from(version);
         return CommonResponse.success(response, response.message());
     }
 }

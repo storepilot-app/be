@@ -1,5 +1,6 @@
 package com.be.mycategory.dto;
 
+import com.be.mycategory.domain.MyCategoryMappingVersion;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "마이카테고리 매핑 업로드 결과")
@@ -19,4 +20,15 @@ public record MyCategoryMappingUploadResponse(
         @Schema(description = "처리 결과 메시지", example = "마이카테고리 매핑이 업로드되었습니다.")
         String message
 ) {
+    public static MyCategoryMappingUploadResponse from(MyCategoryMappingVersion version) {
+        return new MyCategoryMappingUploadResponse(
+                version.getId(),
+                version.getUserKey(),
+                version.getSourceFilename(),
+                version.getRowCount(),
+                version.getMappingCount(),
+                version.getMatchedCount(),
+                "마이카테고리 매핑이 업로드되었습니다."
+        );
+    }
 }
