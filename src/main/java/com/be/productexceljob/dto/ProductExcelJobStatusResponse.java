@@ -1,10 +1,10 @@
-package com.be.categoryjob.dto;
+package com.be.productexceljob.dto;
 
-import com.be.categoryjob.domain.CategoryJobStatus;
+import com.be.productexceljob.domain.ProductExcelJobStatus;
 
-public record CategoryJobStatusResponse(
+public record ProductExcelJobStatusResponse(
         long jobId,
-        CategoryJobStatus status,
+        ProductExcelJobStatus status,
         int totalCount,
         int processedCount,
         int progress,

@@ -1,15 +1,15 @@
-package com.be.categoryjob.domain;
+package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
 
-public class CategoryJob {
+public class ProductExcelJob {
     private final long jobId;
     private final String userKey;
     private final String originalFilename;
     private final Path uploadedFilePath;
     private final Instant createdAt;
-    private volatile CategoryJobStatus status;
+    private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
     private volatile int processedCount;
     private volatile int progress;
@@ -20,19 +20,19 @@ public class CategoryJob {
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
-    public CategoryJob(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
+    public ProductExcelJob(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
         this.jobId = jobId;
         this.userKey = userKey;
         this.originalFilename = originalFilename;
         this.uploadedFilePath = uploadedFilePath;
         this.createdAt = Instant.now();
-        this.status = CategoryJobStatus.PENDING;
+        this.status = ProductExcelJobStatus.PENDING;
         this.stage = "작업 대기 중";
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
     }
 
     public synchronized void start() {
-        status = CategoryJobStatus.PROCESSING;
+        status = ProductExcelJobStatus.PROCESSING;
         stage = "엑셀 분석 중";
         message = "카테고리 찾기 작업을 처리하고 있습니다.";
     }
@@ -54,7 +54,7 @@ public class CategoryJob {
         this.processedCount = totalCount;
         this.progress = 100;
         this.stage = "완료";
-        this.status = CategoryJobStatus.COMPLETED;
+        this.status = ProductExcelJobStatus.COMPLETED;
         this.message = "결과 엑셀을 다운로드할 수 있습니다.";
     }
 
@@ -67,7 +67,7 @@ public class CategoryJob {
     }
 
     public synchronized void fail(String message) {
-        this.status = CategoryJobStatus.FAILED;
+        this.status = ProductExcelJobStatus.FAILED;
         this.stage = "실패";
         this.message = message;
     }
@@ -92,7 +92,7 @@ public class CategoryJob {
         return createdAt;
     }
 
-    public CategoryJobStatus getStatus() {
+    public ProductExcelJobStatus getStatus() {
         return status;
     }
 

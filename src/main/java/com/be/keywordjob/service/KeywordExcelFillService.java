@@ -130,7 +130,7 @@ public class KeywordExcelFillService {
                     categoryColumn,
                     keywordCount,
                     userKey,
-                    CategoryJobProgressListener.NO_OP
+                    ProductExcelJobProgressListener.NO_OP
             );
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
@@ -144,7 +144,7 @@ public class KeywordExcelFillService {
             String categoryColumn,
             Integer keywordCount,
             String userKey,
-            CategoryJobProgressListener progressListener
+            ProductExcelJobProgressListener progressListener
     ) {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
             return fillAndDownload(
@@ -168,7 +168,7 @@ public class KeywordExcelFillService {
             String categoryColumn,
             Integer keywordCount,
             String userKey,
-            CategoryJobProgressListener progressListener
+            ProductExcelJobProgressListener progressListener
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -287,7 +287,7 @@ public class KeywordExcelFillService {
     private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
             List<CategoryMatchProductRequest> products,
             String userKey,
-            CategoryJobProgressListener progressListener
+            ProductExcelJobProgressListener progressListener
     ) {
         Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
         int totalCount = products.size();

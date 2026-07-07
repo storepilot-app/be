@@ -1,16 +1,16 @@
-package com.be.categoryjob.service;
+package com.be.productexceljob.service;
 
-import com.be.categoryjob.domain.CategoryJob;
-import com.be.categoryjob.domain.CategoryJobStatus;
-import com.be.categoryjob.dto.CategoryJobCreateResponse;
-import com.be.categoryjob.dto.CategoryJobStatusResponse;
-import com.be.categoryjob.repository.CategoryJobRepository;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.service.CategoryJobProgressListener;
 import com.be.keywordjob.service.KeywordExcelFillService;
 import com.be.keywordjob.service.KeywordJobUploadService;
+import com.be.keywordjob.service.ProductExcelJobProgressListener;
+import com.be.productexceljob.domain.ProductExcelJob;
+import com.be.productexceljob.domain.ProductExcelJobStatus;
+import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
+import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
+import com.be.productexceljob.repository.ProductExcelJobRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,39 +22,39 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-public class CategoryJobService {
+public class ProductExcelJobService {
     private static final String PRODUCT_NAME_COLUMN = "상품명";
     private static final int KEYWORD_COUNT = 30;
 
-    private final CategoryJobRepository categoryJobRepository;
+    private final ProductExcelJobRepository productExcelJobRepository;
     private final KeywordJobUploadService keywordJobUploadService;
     private final KeywordExcelFillService keywordExcelFillService;
-    @Qualifier("categoryJobExecutor")
-    private final Executor categoryJobExecutor;
+    @Qualifier("productExcelJobExecutor")
+    private final Executor productExcelJobExecutor;
     private final AtomicLong jobIdGenerator = new AtomicLong(1);
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public CategoryJobService(
-            CategoryJobRepository categoryJobRepository,
+    public ProductExcelJobService(
+            ProductExcelJobRepository productExcelJobRepository,
             KeywordJobUploadService keywordJobUploadService,
             KeywordExcelFillService keywordExcelFillService,
-            @Qualifier("categoryJobExecutor") Executor categoryJobExecutor
+            @Qualifier("productExcelJobExecutor") Executor productExcelJobExecutor
     ) {
-        this.categoryJobRepository = categoryJobRepository;
+        this.productExcelJobRepository = productExcelJobRepository;
         this.keywordJobUploadService = keywordJobUploadService;
         this.keywordExcelFillService = keywordExcelFillService;
-        this.categoryJobExecutor = categoryJobExecutor;
+        this.productExcelJobExecutor = productExcelJobExecutor;
     }
 
-    public CategoryJobCreateResponse create(MultipartFile file, String userKey) {
+    public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
         String normalizedUserKey = required(userKey, "사용자 식별자를 입력해주세요.");
         keywordJobUploadService.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
-        Path jobDirectory = uploadRoot().resolve("category-jobs").resolve(String.valueOf(jobId));
+        Path jobDirectory = uploadRoot().resolve("product-excel-jobs").resolve(String.valueOf(jobId));
         Path targetPath = jobDirectory.resolve(filename).normalize();
 
         try {
@@ -64,19 +64,19 @@ public class CategoryJobService {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "엑셀 파일을 저장하지 못했습니다.");
         }
 
-        CategoryJob job = categoryJobRepository.save(new CategoryJob(
+        ProductExcelJob job = productExcelJobRepository.save(new ProductExcelJob(
                 jobId,
                 normalizedUserKey,
                 filename,
                 targetPath
         ));
-        categoryJobExecutor.execute(() -> process(job));
-        return new CategoryJobCreateResponse(jobId, job.getStatus(), job.getMessage());
+        productExcelJobExecutor.execute(() -> process(job));
+        return new ProductExcelJobCreateResponse(jobId, job.getStatus(), job.getMessage());
     }
 
-    public CategoryJobStatusResponse status(long jobId) {
-        CategoryJob job = findJob(jobId);
-        return new CategoryJobStatusResponse(
+    public ProductExcelJobStatusResponse status(long jobId) {
+        ProductExcelJob job = findJob(jobId);
+        return new ProductExcelJobStatusResponse(
                 job.getJobId(),
                 job.getStatus(),
                 job.getTotalCount(),
@@ -90,8 +90,8 @@ public class CategoryJobService {
     }
 
     public ExcelDownloadResult download(long jobId) {
-        CategoryJob job = findJob(jobId);
-        if (job.getStatus() != CategoryJobStatus.COMPLETED
+        ProductExcelJob job = findJob(jobId);
+        if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {
             throw new BusinessException(ErrorCode.JOB_NOT_COMPLETED, "아직 다운로드할 수 있는 결과가 없습니다.");
@@ -99,7 +99,7 @@ public class CategoryJobService {
         return new ExcelDownloadResult(job.getResultFilename(), job.getResultContent());
     }
 
-    private void process(CategoryJob job) {
+    private void process(ProductExcelJob job) {
         job.start();
         try {
             ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
@@ -109,7 +109,7 @@ public class CategoryJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserKey(),
-                    new CategoryJobProgressListener() {
+                    new ProductExcelJobProgressListener() {
                         @Override
                         public void onProgress(int processedCount, int totalCount, String stage) {
                             job.updateProgress(processedCount, totalCount, stage);
@@ -135,8 +135,8 @@ public class CategoryJobService {
         }
     }
 
-    private CategoryJob findJob(long jobId) {
-        return categoryJobRepository.findById(jobId)
+    private ProductExcelJob findJob(long jobId) {
+        return productExcelJobRepository.findById(jobId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
     }
 
