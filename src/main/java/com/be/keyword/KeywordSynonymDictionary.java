@@ -1,4 +1,4 @@
-package com.be.keywordjob.keyword;
+package com.be.keyword;
 
 import java.io.BufferedReader;
 import java.io.IOException;

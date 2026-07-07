@@ -1,4 +1,4 @@
-package com.be.keywordjob.keyword;
+package com.be.keyword;
 
 import java.util.LinkedHashMap;
 import java.util.List;

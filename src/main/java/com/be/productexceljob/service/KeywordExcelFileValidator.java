@@ -1,4 +1,4 @@
-package com.be.keywordjob.service;
+package com.be.productexceljob.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;

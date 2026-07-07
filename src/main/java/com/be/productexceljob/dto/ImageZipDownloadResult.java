@@ -1,4 +1,4 @@
-package com.be.keywordjob.dto;
+package com.be.productexceljob.dto;
 
 public record ImageZipDownloadResult(
         String filename,

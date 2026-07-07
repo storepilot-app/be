@@ -1,8 +1,8 @@
 package com.be.productexceljob.controller;
 
 import com.be.global.response.CommonResponse;
-import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.dto.ImageZipDownloadResult;
+import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ImageZipDownloadResult;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
 import com.be.productexceljob.service.ProductExcelProcessingService;
