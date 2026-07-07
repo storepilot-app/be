@@ -1,17 +1,13 @@
 package com.be.keywordjob.controller;
 
 import com.be.global.response.CommonResponse;
-import com.be.keywordjob.domain.KeywordJob;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
-import com.be.keywordjob.dto.KeywordJobUploadResponse;
 import com.be.keywordjob.service.KeywordExcelFillService;
-import com.be.keywordjob.service.KeywordJobUploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,32 +30,7 @@ public class KeywordJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String ZIP_CONTENT_TYPE = "application/zip";
 
-    private final KeywordJobUploadService keywordJobUploadService;
     private final KeywordExcelFillService keywordExcelFillService;
-
-    @Operation(
-            summary = "상품 엑셀 업로드",
-            description = "상품 엑셀 파일을 업로드하고 키워드 생성 작업을 대기 상태로 등록합니다."
-    )
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public CommonResponse<KeywordJobUploadResponse> upload(
-            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
-            @RequestParam("file") MultipartFile file,
-            @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
-            @RequestParam("productNameColumn") String productNameColumn,
-            @Parameter(description = "네이버 카테고리 컬럼명. 엑셀에 카테고리 컬럼이 없으면 비워둡니다.", example = "네이버 카테고리")
-            @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
-            @Parameter(description = "상품당 생성할 키워드 수. 기본값은 30입니다.", example = "30")
-            @RequestParam(value = "keywordCount", required = false) Integer keywordCount
-    ) {
-        KeywordJob job = keywordJobUploadService.upload(file, productNameColumn, categoryColumn, keywordCount);
-        KeywordJobUploadResponse response = new KeywordJobUploadResponse(
-                job.getJobId(),
-                job.getStatus(),
-                "Keyword job registered."
-        );
-        return CommonResponse.success(response, response.message());
-    }
 
     @Operation(
             summary = "상품 엑셀 작성 후 다운로드",

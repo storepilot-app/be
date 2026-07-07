@@ -1,4 +1,4 @@
-package com.be.keywordjob.service;
+package com.be.productexcel.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
@@ -22,6 +22,8 @@ import com.be.keywordjob.keyword.KeywordSynonymDictionary.SynonymExpansion;
 import com.be.keywordjob.keyword.ProductNameTokenExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
 import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
+import com.be.keywordjob.service.KeywordExcelFileValidator;
+import com.be.keywordjob.service.ProductExcelJobProgressListener;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,7 +63,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class KeywordExcelFillService {
+public class ProductExcelProcessingService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
@@ -94,7 +96,7 @@ public class KeywordExcelFillService {
     private static final String NO_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
-    private final KeywordJobUploadService keywordJobUploadService;
+    private final KeywordExcelFileValidator keywordExcelFileValidator;
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCandidateRanker keywordCandidateRanker;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
@@ -120,7 +122,7 @@ public class KeywordExcelFillService {
             Integer keywordCount,
             String userKey
     ) {
-        keywordJobUploadService.validate(file, productNameColumn, keywordCount);
+        keywordExcelFileValidator.validate(file, productNameColumn, keywordCount);
 
         try (InputStream inputStream = file.getInputStream()) {
             return fillAndDownload(

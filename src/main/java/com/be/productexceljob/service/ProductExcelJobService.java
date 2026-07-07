@@ -3,8 +3,8 @@ package com.be.productexceljob.service;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
+import com.be.keywordjob.service.KeywordExcelFileValidator;
 import com.be.keywordjob.service.KeywordExcelFillService;
-import com.be.keywordjob.service.KeywordJobUploadService;
 import com.be.keywordjob.service.ProductExcelJobProgressListener;
 import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.domain.ProductExcelJobStatus;
@@ -29,7 +29,7 @@ public class ProductExcelJobService {
     private static final int KEYWORD_COUNT = 30;
 
     private final ProductExcelJobRepository productExcelJobRepository;
-    private final KeywordJobUploadService keywordJobUploadService;
+    private final KeywordExcelFileValidator keywordExcelFileValidator;
     private final KeywordExcelFillService keywordExcelFillService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
@@ -40,7 +40,7 @@ public class ProductExcelJobService {
 
     public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
         String trimmedUserKey = validateAndTrimUserKey(userKey);
-        keywordJobUploadService.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
+        keywordExcelFileValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
