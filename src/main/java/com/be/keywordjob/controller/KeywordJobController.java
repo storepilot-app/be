@@ -28,7 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/keyword-jobs")
-@Tag(name = "Keyword Jobs", description = "Excel keyword job API")
+@Tag(name = "키워드 작업", description = "상품 엑셀 키워드 생성 및 이미지 다운로드 API")
 @RequiredArgsConstructor
 public class KeywordJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -38,41 +38,18 @@ public class KeywordJobController {
     private final KeywordExcelFillService keywordExcelFillService;
 
     @Operation(
-            summary = "Upload product excel",
-            description = "Uploads a product excel file and registers a keyword job in PENDING state.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Job registered",
-                            content = @Content(
-                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = CommonResponse.class),
-                                    examples = @ExampleObject(value = """
-                                            {
-                                              "success": true,
-                                              "data": {
-                                                "jobId": 1,
-                                                "status": "PENDING",
-                                                "message": "Keyword job registered."
-                                              },
-                                              "message": "Keyword job registered.",
-                                              "code": null,
-                                              "errors": null
-                                            }
-                                            """)
-                            )
-                    )
-            }
+            summary = "상품 엑셀 업로드",
+            description = "상품 엑셀 파일을 업로드하고 키워드 생성 작업을 대기 상태로 등록합니다."
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<KeywordJobUploadResponse> upload(
-            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Product name column", example = "상품명", required = true)
+            @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
             @RequestParam("productNameColumn") String productNameColumn,
-            @Parameter(description = "Naver category column. Leave empty when the excel has no category column.", example = "네이버 카테고리")
+            @Parameter(description = "네이버 카테고리 컬럼명. 엑셀에 카테고리 컬럼이 없으면 비워둡니다.", example = "네이버 카테고리")
             @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
-            @Parameter(description = "Keyword count per product. Default is 30.", example = "30")
+            @Parameter(description = "상품당 생성할 키워드 수. 기본값은 30입니다.", example = "30")
             @RequestParam(value = "keywordCount", required = false) Integer keywordCount
     ) {
         KeywordJob job = keywordJobUploadService.upload(file, productNameColumn, categoryColumn, keywordCount);
@@ -85,27 +62,20 @@ public class KeywordJobController {
     }
 
     @Operation(
-            summary = "Fill excel and download",
-            description = "Fills keywords in column L, my category in column T, Naver category in column U, product name in column AA, Top-10 Naver category candidates with scores in columns AB to AK, the LLM-selected category in column AL, and LLM status in column AM, then returns the result excel file.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Result excel download",
-                            content = @Content(mediaType = EXCEL_CONTENT_TYPE)
-                    )
-            }
+            summary = "상품 엑셀 작성 후 다운로드",
+            description = "L열에 키워드, T열에 마이카테고리, U열에 네이버 카테고리, AA열에 상품명, AB~AK열에 Top-10 네이버 카테고리 후보와 점수, AL열에 LLM 선택 카테고리, AM열에 LLM 상태를 작성한 뒤 결과 엑셀 파일을 반환합니다."
     )
     @PostMapping(value = "/upload-download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ByteArrayResource> uploadAndDownload(
-            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Product name column", example = "상품명", required = true)
+            @Parameter(description = "상품명 컬럼명", example = "상품명", required = true)
             @RequestParam("productNameColumn") String productNameColumn,
-            @Parameter(description = "Naver category column. Leave empty when the excel has no category column.", example = "네이버 카테고리")
+            @Parameter(description = "네이버 카테고리 컬럼명. 엑셀에 카테고리 컬럼이 없으면 비워둡니다.", example = "네이버 카테고리")
             @RequestParam(value = "categoryColumn", required = false, defaultValue = "") String categoryColumn,
-            @Parameter(description = "Keyword count per product. Default is 30.", example = "30")
+            @Parameter(description = "상품당 생성할 키워드 수. 기본값은 30입니다.", example = "30")
             @RequestParam(value = "keywordCount", required = false) Integer keywordCount,
-            @Parameter(description = "User key for my category mapping.", example = "user-a")
+            @Parameter(description = "마이카테고리 매핑을 조회할 사용자 식별자", example = "user-a")
             @RequestParam(value = "userKey", required = false, defaultValue = "") String userKey
     ) {
         ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
@@ -123,24 +93,14 @@ public class KeywordJobController {
     }
 
     @Operation(
-            summary = "Download product images",
-            description = "Downloads images from the 목록이미지1 column to the requested server directory.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Image download complete",
-                            content = @Content(
-                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                    schema = @Schema(implementation = CommonResponse.class)
-                            )
-                    )
-            }
+            summary = "상품 이미지 다운로드",
+            description = "목록이미지1 컬럼의 이미지 URL을 읽어 지정한 서버 디렉터리에 이미지를 저장합니다."
     )
     @PostMapping(value = "/images/download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ImageDownloadResponse> downloadImages(
-            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Image output directory. Leave empty to use uploads/product-images.", example = "C:\\StorePilot\\images")
+            @Parameter(description = "이미지 저장 디렉터리. 비워두면 uploads/product-images를 사용합니다.", example = "C:\\StorePilot\\images")
             @RequestParam(value = "imageOutputDir", required = false, defaultValue = "") String imageOutputDir
     ) {
         ImageDownloadResponse response = keywordExcelFillService.downloadImages(file, imageOutputDir);
@@ -148,19 +108,12 @@ public class KeywordJobController {
     }
 
     @Operation(
-            summary = "Download product images as zip",
-            description = "Downloads images from the 목록이미지1 column and returns them as a zip file.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Product image zip download",
-                            content = @Content(mediaType = ZIP_CONTENT_TYPE)
-                    )
-            }
+            summary = "상품 이미지 ZIP 다운로드",
+            description = "목록이미지1 컬럼의 이미지 URL을 읽어 이미지를 다운로드하고 ZIP 파일로 반환합니다."
     )
     @PostMapping(value = "/images/download-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ByteArrayResource> downloadImagesZip(
-            @Parameter(description = "Product excel file(.xlsx, .xls)", required = true)
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
         ImageZipDownloadResult result = keywordExcelFillService.downloadImagesAsZip(file);
