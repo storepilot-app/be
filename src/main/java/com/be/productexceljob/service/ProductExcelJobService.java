@@ -16,12 +16,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@RequiredArgsConstructor
 public class ProductExcelJobService {
     private static final String PRODUCT_NAME_COLUMN = "상품명";
     private static final int KEYWORD_COUNT = 30;
@@ -35,18 +37,6 @@ public class ProductExcelJobService {
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
-
-    public ProductExcelJobService(
-            ProductExcelJobRepository productExcelJobRepository,
-            KeywordJobUploadService keywordJobUploadService,
-            KeywordExcelFillService keywordExcelFillService,
-            @Qualifier("productExcelJobExecutor") Executor productExcelJobExecutor
-    ) {
-        this.productExcelJobRepository = productExcelJobRepository;
-        this.keywordJobUploadService = keywordJobUploadService;
-        this.keywordExcelFillService = keywordExcelFillService;
-        this.productExcelJobExecutor = productExcelJobExecutor;
-    }
 
     public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
         String normalizedUserKey = required(userKey, "사용자 식별자를 입력해주세요.");
