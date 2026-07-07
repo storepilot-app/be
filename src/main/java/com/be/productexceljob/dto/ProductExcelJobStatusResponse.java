@@ -1,5 +1,6 @@
 package com.be.productexceljob.dto;
 
+import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.domain.ProductExcelJobStatus;
 
 public record ProductExcelJobStatusResponse(
@@ -13,4 +14,17 @@ public record ProductExcelJobStatusResponse(
         Long categoryElapsedMillis,
         Long keywordElapsedMillis
 ) {
+    public static ProductExcelJobStatusResponse from(ProductExcelJob job) {
+        return new ProductExcelJobStatusResponse(
+                job.getJobId(),
+                job.getStatus(),
+                job.getTotalCount(),
+                job.getProcessedCount(),
+                job.getProgress(),
+                job.getStage(),
+                job.getMessage(),
+                job.getCategoryElapsedMillis(),
+                job.getKeywordElapsedMillis()
+        );
+    }
 }

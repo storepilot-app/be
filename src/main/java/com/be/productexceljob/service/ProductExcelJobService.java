@@ -61,22 +61,12 @@ public class ProductExcelJobService {
                 targetPath
         ));
         productExcelJobExecutor.execute(() -> process(job));
-        return new ProductExcelJobCreateResponse(jobId, job.getStatus(), job.getMessage());
+        return ProductExcelJobCreateResponse.from(job);
     }
 
     public ProductExcelJobStatusResponse status(long jobId) {
         ProductExcelJob job = findJob(jobId);
-        return new ProductExcelJobStatusResponse(
-                job.getJobId(),
-                job.getStatus(),
-                job.getTotalCount(),
-                job.getProcessedCount(),
-                job.getProgress(),
-                job.getStage(),
-                job.getMessage(),
-                job.getCategoryElapsedMillis(),
-                job.getKeywordElapsedMillis()
-        );
+        return ProductExcelJobStatusResponse.from(job);
     }
 
     public ExcelDownloadResult download(long jobId) {
