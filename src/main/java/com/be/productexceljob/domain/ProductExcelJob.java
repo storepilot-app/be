@@ -20,7 +20,7 @@ public class ProductExcelJob {
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
-    public ProductExcelJob(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
+    private ProductExcelJob(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
         this.jobId = jobId;
         this.userKey = userKey;
         this.originalFilename = originalFilename;
@@ -29,6 +29,10 @@ public class ProductExcelJob {
         this.status = ProductExcelJobStatus.PENDING;
         this.stage = "작업 대기 중";
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
+    }
+
+    public static ProductExcelJob register(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
+        return new ProductExcelJob(jobId, userKey, originalFilename, uploadedFilePath);
     }
 
     public synchronized void start() {

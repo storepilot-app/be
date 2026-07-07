@@ -39,7 +39,7 @@ public class ProductExcelJobService {
     private String uploadDir;
 
     public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
-        String normalizedUserKey = required(userKey, "사용자 식별자를 입력해주세요.");
+        String trimmedUserKey = validateAndTrimUserKey(userKey);
         keywordJobUploadService.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
@@ -54,9 +54,9 @@ public class ProductExcelJobService {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "엑셀 파일을 저장하지 못했습니다.");
         }
 
-        ProductExcelJob job = productExcelJobRepository.save(new ProductExcelJob(
+        ProductExcelJob job = productExcelJobRepository.save(ProductExcelJob.register(
                 jobId,
-                normalizedUserKey,
+                trimmedUserKey,
                 filename,
                 targetPath
         ));
@@ -128,6 +128,10 @@ public class ProductExcelJobService {
     private ProductExcelJob findJob(long jobId) {
         return productExcelJobRepository.findById(jobId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
+    }
+
+    private String validateAndTrimUserKey(String userKey) {
+        return required(userKey, "사용자 식별자를 입력해주세요.");
     }
 
     private String required(String value, String message) {

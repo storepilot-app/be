@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class ProductExcelJobTest {
     @Test
     void tracksBatchProgressAndCompletesAtOneHundredPercent() {
-        ProductExcelJob job = new ProductExcelJob(1L, "user-a", "input.xlsx", Path.of("input.xlsx"));
+        ProductExcelJob job = ProductExcelJob.register(1L, "user-a", "input.xlsx", Path.of("input.xlsx"));
 
         job.start();
         job.updateProgress(30, 100, "카테고리 찾는 중");
