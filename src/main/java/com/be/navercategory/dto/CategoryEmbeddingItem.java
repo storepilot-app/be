@@ -1,4 +1,4 @@
-package com.be.categorymatcher.dto;
+package com.be.navercategory.dto;
 
 public record CategoryEmbeddingItem(
         Long categoryId,

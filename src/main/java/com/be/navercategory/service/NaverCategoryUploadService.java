@@ -2,7 +2,6 @@ package com.be.navercategory.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
-import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
@@ -43,7 +42,7 @@ public class NaverCategoryUploadService {
 
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
-    private final CategoryMatcherService categoryMatcherService;
+    private final NaverCategoryEmbeddingService naverCategoryEmbeddingService;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
@@ -100,7 +99,7 @@ public class NaverCategoryUploadService {
             }
             naverCategoryRepository.saveAll(categories);
             writeCsv(csvFilePath, categories);
-            categoryMatcherService.rebuildEmbeddings(version.getId());
+            naverCategoryEmbeddingService.rebuildEmbeddings(version.getId(), categories);
             return version;
         } catch (IOException exception) {
             throw new BusinessException(
