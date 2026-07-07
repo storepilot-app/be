@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 @Component
-public class KeywordExcelFileValidator {
+public class ProductExcelJobRequestValidator {
     public void validate(MultipartFile file, String productNameColumn, Integer keywordCount) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Please upload an excel file.");

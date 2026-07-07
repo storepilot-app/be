@@ -26,7 +26,7 @@ public class ProductExcelJobService {
     private static final int KEYWORD_COUNT = 30;
 
     private final ProductExcelJobRepository productExcelJobRepository;
-    private final KeywordExcelFileValidator keywordExcelFileValidator;
+    private final ProductExcelJobRequestValidator productExcelJobRequestValidator;
     private final ProductExcelProcessingService productExcelProcessingService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
@@ -37,7 +37,7 @@ public class ProductExcelJobService {
 
     public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
         String trimmedUserKey = validateAndTrimUserKey(userKey);
-        keywordExcelFileValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
+        productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());

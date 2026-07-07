@@ -93,7 +93,6 @@ public class ProductExcelProcessingService {
     private static final String NO_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
-    private final KeywordExcelFileValidator keywordExcelFileValidator;
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCandidateRanker keywordCandidateRanker;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
