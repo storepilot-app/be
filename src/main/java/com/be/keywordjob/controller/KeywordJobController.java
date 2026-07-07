@@ -4,7 +4,7 @@ import com.be.global.response.CommonResponse;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
-import com.be.keywordjob.service.KeywordExcelFillService;
+import com.be.productexceljob.service.ProductExcelProcessingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -30,7 +30,7 @@ public class KeywordJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String ZIP_CONTENT_TYPE = "application/zip";
 
-    private final KeywordExcelFillService keywordExcelFillService;
+    private final ProductExcelProcessingService productExcelProcessingService;
 
     @Operation(
             summary = "상품 엑셀 작성 후 다운로드",
@@ -49,7 +49,7 @@ public class KeywordJobController {
             @Parameter(description = "마이카테고리 매핑을 조회할 사용자 식별자", example = "user-a")
             @RequestParam(value = "userKey", required = false, defaultValue = "") String userKey
     ) {
-        ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
+        ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                 file,
                 productNameColumn,
                 categoryColumn,
@@ -74,7 +74,7 @@ public class KeywordJobController {
             @Parameter(description = "이미지 저장 디렉터리. 비워두면 uploads/product-images를 사용합니다.", example = "C:\\StorePilot\\images")
             @RequestParam(value = "imageOutputDir", required = false, defaultValue = "") String imageOutputDir
     ) {
-        ImageDownloadResponse response = keywordExcelFillService.downloadImages(file, imageOutputDir);
+        ImageDownloadResponse response = productExcelProcessingService.downloadImages(file, imageOutputDir);
         return CommonResponse.success(response, response.message());
     }
 
@@ -87,7 +87,7 @@ public class KeywordJobController {
             @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        ImageZipDownloadResult result = keywordExcelFillService.downloadImagesAsZip(file);
+        ImageZipDownloadResult result = productExcelProcessingService.downloadImagesAsZip(file);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(ZIP_CONTENT_TYPE))

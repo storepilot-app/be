@@ -4,7 +4,6 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
 import com.be.keywordjob.service.KeywordExcelFileValidator;
-import com.be.keywordjob.service.KeywordExcelFillService;
 import com.be.keywordjob.service.ProductExcelJobProgressListener;
 import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.domain.ProductExcelJobStatus;
@@ -30,7 +29,7 @@ public class ProductExcelJobService {
 
     private final ProductExcelJobRepository productExcelJobRepository;
     private final KeywordExcelFileValidator keywordExcelFileValidator;
-    private final KeywordExcelFillService keywordExcelFillService;
+    private final ProductExcelProcessingService productExcelProcessingService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
     private final AtomicLong jobIdGenerator = new AtomicLong(1);
@@ -82,7 +81,7 @@ public class ProductExcelJobService {
     private void process(ProductExcelJob job) {
         job.start();
         try {
-            ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
+            ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                     job.getUploadedFilePath(),
                     job.getOriginalFilename(),
                     PRODUCT_NAME_COLUMN,
