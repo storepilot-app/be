@@ -1,15 +1,9 @@
 package com.be.keywordjob.controller;
 
-import com.be.global.response.CommonResponse;
-import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.productexceljob.service.ProductExcelProcessingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -30,21 +24,6 @@ public class KeywordJobController {
     private static final String ZIP_CONTENT_TYPE = "application/zip";
 
     private final ProductExcelProcessingService productExcelProcessingService;
-
-    @Operation(
-            summary = "상품 이미지 다운로드",
-            description = "목록이미지1 컬럼의 이미지 URL을 읽어 지정한 서버 디렉터리에 이미지를 저장합니다."
-    )
-    @PostMapping(value = "/images/download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public CommonResponse<ImageDownloadResponse> downloadImages(
-            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
-            @RequestParam("file") MultipartFile file,
-            @Parameter(description = "이미지 저장 디렉터리. 비워두면 uploads/product-images를 사용합니다.", example = "C:\\StorePilot\\images")
-            @RequestParam(value = "imageOutputDir", required = false, defaultValue = "") String imageOutputDir
-    ) {
-        ImageDownloadResponse response = productExcelProcessingService.downloadImages(file, imageOutputDir);
-        return CommonResponse.success(response, response.message());
-    }
 
     @Operation(
             summary = "상품 이미지 ZIP 다운로드",

@@ -9,7 +9,6 @@ import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.dto.ImageDownloadResponse;
 import com.be.keywordjob.dto.ImageZipDownloadResult;
 import com.be.keywordjob.excel.KeywordDetailSheetWriter;
 import com.be.keywordjob.keyword.CategoryTokenExtractor;
@@ -108,9 +107,6 @@ public class ProductExcelProcessingService {
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-
-    @Value("${storepilot.upload-dir:uploads}")
-    private String uploadDir;
 
     @Value("${storepilot.category.batch-size:300}")
     private int categoryBatchSize;
@@ -321,62 +317,6 @@ public class ProductExcelProcessingService {
         return categories;
     }
 
-    public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
-        validateExcelFile(file);
-
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
-            }
-
-            int imageUrlColumnIndex = findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN);
-            int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
-            int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
-            Path imageDirectory = resolveImageDirectory(imageOutputDir);
-            Files.createDirectories(imageDirectory);
-
-            int savedCount = 0;
-            int failedCount = 0;
-            DataFormatter formatter = new DataFormatter(Locale.KOREA);
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                boolean saved = downloadImageIfPresent(
-                        row,
-                        formatter,
-                        imageUrlColumnIndex,
-                        productCodeColumnIndex,
-                        productNumberColumnIndex,
-                        imageDirectory,
-                        rowIndex + 1
-                );
-
-                if (saved) {
-                    savedCount++;
-                } else {
-                    failedCount++;
-                }
-            }
-
-            return new ImageDownloadResponse(
-                    savedCount,
-                    failedCount,
-                    imageDirectory.toString(),
-                    "Images downloaded."
-            );
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process image download.");
-        }
-    }
-
     public ImageZipDownloadResult downloadImagesAsZip(MultipartFile file) {
         validateExcelFile(file);
 
@@ -438,33 +378,6 @@ public class ProductExcelProcessingService {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process image zip download.");
-        }
-    }
-
-    private boolean downloadImageIfPresent(
-            Row row,
-            DataFormatter formatter,
-            int imageUrlColumnIndex,
-            int productCodeColumnIndex,
-            int productNumberColumnIndex,
-            Path imageDirectory,
-            int excelRowNumber
-    ) {
-        String imageUrl = readCell(row, imageUrlColumnIndex, formatter);
-        if (!isHttpUrl(imageUrl)) {
-            return false;
-        }
-
-        String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
-        String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
-        String filenameBase = !productCode.isBlank() ? productCode : (!productNumber.isBlank() ? productNumber : "row_" + excelRowNumber);
-        Path targetPath = imageDirectory.resolve(safeFilename(filenameBase) + imageExtension(imageUrl));
-
-        try {
-            Files.write(targetPath, fetchImage(imageUrl));
-            return true;
-        } catch (Exception ignored) {
-            return false;
         }
     }
 
@@ -883,13 +796,6 @@ public class ProductExcelProcessingService {
     }
 
     private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
-    }
-
-    private Path resolveImageDirectory(String imageOutputDir) {
-        if (imageOutputDir != null && !imageOutputDir.isBlank()) {
-            return Path.of(imageOutputDir).toAbsolutePath().normalize();
-        }
-        return Path.of(uploadDir).toAbsolutePath().normalize().resolve("product-images");
     }
 
     private String imageExtension(String imageUrl) {
