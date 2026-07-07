@@ -63,12 +63,12 @@ public class ProductExcelJobController {
     }
 
     @Operation(
-            summary = "?곹뭹 ?대?吏 ZIP ?ㅼ슫濡쒕뱶",
-            description = "紐⑸줉?대?吏1 而щ읆???대?吏 URL???쎌뼱 ?대?吏瑜??ㅼ슫濡쒕뱶?섍퀬 ZIP ?뚯씪濡?諛섑솚?⑸땲??"
+            summary = "상품 이미지 ZIP 다운로드",
+            description = "목록이미지1 컬럼의 이미지 URL을 읽어 이미지를 다운로드하고 ZIP 파일로 반환합니다."
     )
     @PostMapping(value = "/images/download-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ByteArrayResource> downloadImagesZip(
-            @Parameter(description = "?곹뭹 ?묒? ?뚯씪(.xlsx, .xls)", required = true)
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
         ImageZipDownloadResult result = productExcelProcessingService.downloadImagesAsZip(file);
