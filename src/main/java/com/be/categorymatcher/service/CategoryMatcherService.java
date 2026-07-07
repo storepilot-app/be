@@ -12,6 +12,7 @@ import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
 import com.be.navercategory.repository.NaverCategoryVersionRepository;
+import com.be.navercategory.service.NaverCategoryEmbeddingService;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ public class CategoryMatcherService {
     private final CategoryMatcherAiClient categoryMatcherAiClient;
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
+    private final NaverCategoryEmbeddingService naverCategoryEmbeddingService;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
 
     public Map<Integer, MyCategoryMatchResult> findMyCategoryCodes(
@@ -111,19 +113,6 @@ public class CategoryMatcherService {
         return results;
     }
 
-    public void rebuildEmbeddings(Long versionId) {
-        List<NaverCategory> categories = naverCategoryRepository.findByVersionId(versionId);
-        if (!categories.isEmpty()) {
-            categoryMatcherAiClient.rebuild(versionId, categories);
-        }
-    }
-
-    public Optional<Long> rebuildActiveEmbeddings() {
-        Optional<NaverCategoryVersion> activeVersion = naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc();
-        activeVersion.ifPresent(version -> rebuildEmbeddings(version.getId()));
-        return activeVersion.map(NaverCategoryVersion::getId);
-    }
-
     private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products,
@@ -137,7 +126,7 @@ public class CategoryMatcherService {
         }
 
         if (rebuildOnMissingCache) {
-            categoryMatcherAiClient.rebuild(versionId, categories);
+            naverCategoryEmbeddingService.rebuildEmbeddings(versionId);
             return categoryMatcherAiClient.predict(versionId, products)
                     .map(response -> response.results() == null ? List.<CategoryMatchPrediction>of() : response.results())
                     .map(this::toPredictionMap)

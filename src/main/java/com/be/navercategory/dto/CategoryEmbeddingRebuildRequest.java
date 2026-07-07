@@ -1,4 +1,4 @@
-package com.be.categorymatcher.dto;
+package com.be.navercategory.dto;
 
 import java.util.List;
 

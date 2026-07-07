@@ -1,10 +1,10 @@
-package com.be.categoryjob.controller;
+package com.be.productexceljob.controller;
 
-import com.be.categoryjob.dto.CategoryJobCreateResponse;
-import com.be.categoryjob.dto.CategoryJobStatusResponse;
-import com.be.categoryjob.service.CategoryJobService;
 import com.be.global.response.CommonResponse;
 import com.be.keywordjob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
+import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
+import com.be.productexceljob.service.ProductExcelJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,36 +22,36 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/v1/category-jobs")
-@Tag(name = "Category Jobs", description = "Asynchronous product category matching API")
+@RequestMapping("/api/v1/product-excel-jobs")
+@Tag(name = "상품 엑셀 작업", description = "상품 엑셀 카테고리 분류 및 키워드 생성 비동기 작업 API")
 @RequiredArgsConstructor
-public class CategoryJobController {
+public class ProductExcelJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    private final CategoryJobService categoryJobService;
+    private final ProductExcelJobService productExcelJobService;
 
-    @Operation(summary = "Start category matching job")
+    @Operation(summary = "상품 엑셀 처리 작업 시작")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public CommonResponse<CategoryJobCreateResponse> create(
-            @Parameter(description = "Product Excel file", required = true)
+    public CommonResponse<ProductExcelJobCreateResponse> create(
+            @Parameter(description = "상품 엑셀 파일", required = true)
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "User key for my-category mapping", required = true)
+            @Parameter(description = "마이카테고리 매핑을 조회할 사용자 식별자", required = true)
             @RequestParam("userKey") String userKey
     ) {
-        CategoryJobCreateResponse response = categoryJobService.create(file, userKey);
+        ProductExcelJobCreateResponse response = productExcelJobService.create(file, userKey);
         return CommonResponse.success(response, response.message());
     }
 
-    @Operation(summary = "Get category matching progress")
+    @Operation(summary = "상품 엑셀 처리 진행률 조회")
     @GetMapping("/{jobId}/status")
-    public CommonResponse<CategoryJobStatusResponse> status(@PathVariable long jobId) {
-        return CommonResponse.success(categoryJobService.status(jobId));
+    public CommonResponse<ProductExcelJobStatusResponse> status(@PathVariable long jobId) {
+        return CommonResponse.success(productExcelJobService.status(jobId));
     }
 
-    @Operation(summary = "Download completed category result")
+    @Operation(summary = "완료된 상품 엑셀 결과 다운로드")
     @GetMapping("/{jobId}/download")
     public ResponseEntity<ByteArrayResource> download(@PathVariable long jobId) {
-        ExcelDownloadResult result = categoryJobService.download(jobId);
+        ExcelDownloadResult result = productExcelJobService.download(jobId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())
