@@ -116,30 +116,6 @@ public class ProductExcelProcessingService {
     private int categoryBatchSize;
 
     public ExcelDownloadResult fillAndDownload(
-            MultipartFile file,
-            String productNameColumn,
-            String categoryColumn,
-            Integer keywordCount,
-            String userKey
-    ) {
-        keywordExcelFileValidator.validate(file, productNameColumn, keywordCount);
-
-        try (InputStream inputStream = file.getInputStream()) {
-            return fillAndDownload(
-                    inputStream,
-                    file.getOriginalFilename(),
-                    productNameColumn,
-                    categoryColumn,
-                    keywordCount,
-                    userKey,
-                    ProductExcelJobProgressListener.NO_OP
-            );
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
-        }
-    }
-
-    public ExcelDownloadResult fillAndDownload(
             Path filePath,
             String originalFilename,
             String productNameColumn,
