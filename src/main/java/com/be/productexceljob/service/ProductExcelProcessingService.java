@@ -1,4 +1,4 @@
-package com.be.keywordjob.service;
+package com.be.productexceljob.service;
 
 import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
@@ -8,20 +8,19 @@ import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
-import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.dto.ImageDownloadResponse;
-import com.be.keywordjob.dto.ImageZipDownloadResult;
-import com.be.keywordjob.excel.KeywordDetailSheetWriter;
-import com.be.keywordjob.keyword.CategoryTokenExtractor;
-import com.be.keywordjob.keyword.KeywordCandidateRanker;
-import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
-import com.be.keywordjob.keyword.KeywordCombinationTemplate;
-import com.be.keywordjob.keyword.KeywordDetailEntry;
-import com.be.keywordjob.keyword.KeywordSynonymDictionary;
-import com.be.keywordjob.keyword.KeywordSynonymDictionary.SynonymExpansion;
-import com.be.keywordjob.keyword.ProductNameTokenExtractor;
-import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor;
-import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
+import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ImageZipDownloadResult;
+import com.be.productexceljob.excel.KeywordDetailSheetWriter;
+import com.be.keyword.CategoryTokenExtractor;
+import com.be.keyword.KeywordCandidateRanker;
+import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
+import com.be.keyword.KeywordCombinationTemplate;
+import com.be.keyword.KeywordDetailEntry;
+import com.be.keyword.KeywordSynonymDictionary;
+import com.be.keyword.KeywordSynonymDictionary.SynonymExpansion;
+import com.be.keyword.ProductNameTokenExtractor;
+import com.be.keyword.SimilarProductRepeatedPhraseExtractor;
+import com.be.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,7 +60,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class KeywordExcelFillService {
+public class ProductExcelProcessingService {
     private static final int KEYWORD_COLUMN_INDEX = 11; // L
     private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
     private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
@@ -94,7 +93,6 @@ public class KeywordExcelFillService {
     private static final String NO_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
-    private final KeywordJobUploadService keywordJobUploadService;
     private final CategoryTokenExtractor categoryTokenExtractor;
     private final KeywordCandidateRanker keywordCandidateRanker;
     private final KeywordCombinationTemplate keywordCombinationTemplate;
@@ -107,35 +105,8 @@ public class KeywordExcelFillService {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    @Value("${storepilot.upload-dir:uploads}")
-    private String uploadDir;
-
     @Value("${storepilot.category.batch-size:300}")
     private int categoryBatchSize;
-
-    public ExcelDownloadResult fillAndDownload(
-            MultipartFile file,
-            String productNameColumn,
-            String categoryColumn,
-            Integer keywordCount,
-            String userKey
-    ) {
-        keywordJobUploadService.validate(file, productNameColumn, keywordCount);
-
-        try (InputStream inputStream = file.getInputStream()) {
-            return fillAndDownload(
-                    inputStream,
-                    file.getOriginalFilename(),
-                    productNameColumn,
-                    categoryColumn,
-                    keywordCount,
-                    userKey,
-                    ProductExcelJobProgressListener.NO_OP
-            );
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
-        }
-    }
 
     public ExcelDownloadResult fillAndDownload(
             Path filePath,
@@ -343,62 +314,6 @@ public class KeywordExcelFillService {
         return categories;
     }
 
-    public ImageDownloadResponse downloadImages(MultipartFile file, String imageOutputDir) {
-        validateExcelFile(file);
-
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
-            }
-
-            int imageUrlColumnIndex = findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN);
-            int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
-            int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
-            Path imageDirectory = resolveImageDirectory(imageOutputDir);
-            Files.createDirectories(imageDirectory);
-
-            int savedCount = 0;
-            int failedCount = 0;
-            DataFormatter formatter = new DataFormatter(Locale.KOREA);
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                boolean saved = downloadImageIfPresent(
-                        row,
-                        formatter,
-                        imageUrlColumnIndex,
-                        productCodeColumnIndex,
-                        productNumberColumnIndex,
-                        imageDirectory,
-                        rowIndex + 1
-                );
-
-                if (saved) {
-                    savedCount++;
-                } else {
-                    failedCount++;
-                }
-            }
-
-            return new ImageDownloadResponse(
-                    savedCount,
-                    failedCount,
-                    imageDirectory.toString(),
-                    "Images downloaded."
-            );
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process image download.");
-        }
-    }
-
     public ImageZipDownloadResult downloadImagesAsZip(MultipartFile file) {
         validateExcelFile(file);
 
@@ -460,33 +375,6 @@ public class KeywordExcelFillService {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process image zip download.");
-        }
-    }
-
-    private boolean downloadImageIfPresent(
-            Row row,
-            DataFormatter formatter,
-            int imageUrlColumnIndex,
-            int productCodeColumnIndex,
-            int productNumberColumnIndex,
-            Path imageDirectory,
-            int excelRowNumber
-    ) {
-        String imageUrl = readCell(row, imageUrlColumnIndex, formatter);
-        if (!isHttpUrl(imageUrl)) {
-            return false;
-        }
-
-        String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
-        String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
-        String filenameBase = !productCode.isBlank() ? productCode : (!productNumber.isBlank() ? productNumber : "row_" + excelRowNumber);
-        Path targetPath = imageDirectory.resolve(safeFilename(filenameBase) + imageExtension(imageUrl));
-
-        try {
-            Files.write(targetPath, fetchImage(imageUrl));
-            return true;
-        } catch (Exception ignored) {
-            return false;
         }
     }
 
@@ -905,13 +793,6 @@ public class KeywordExcelFillService {
     }
 
     private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
-    }
-
-    private Path resolveImageDirectory(String imageOutputDir) {
-        if (imageOutputDir != null && !imageOutputDir.isBlank()) {
-            return Path.of(imageOutputDir).toAbsolutePath().normalize();
-        }
-        return Path.of(uploadDir).toAbsolutePath().normalize().resolve("product-images");
     }
 
     private String imageExtension(String imageUrl) {

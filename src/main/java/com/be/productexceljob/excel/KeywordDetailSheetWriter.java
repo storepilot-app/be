@@ -1,7 +1,7 @@
-package com.be.keywordjob.excel;
+package com.be.productexceljob.excel;
 
-import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
-import com.be.keywordjob.keyword.KeywordDetailEntry;
+import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
+import com.be.keyword.KeywordDetailEntry;
 import java.util.List;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;

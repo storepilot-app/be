@@ -1,10 +1,10 @@
-package com.be.keywordjob.keyword;
+package com.be.keyword;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.be.keywordjob.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
+import com.be.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

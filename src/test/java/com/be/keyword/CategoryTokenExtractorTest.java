@@ -1,4 +1,4 @@
-package com.be.keywordjob.keyword;
+package com.be.keyword;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

@@ -1,9 +1,11 @@
 package com.be.productexceljob.controller;
 
 import com.be.global.response.CommonResponse;
-import com.be.keywordjob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ImageZipDownloadResult;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
+import com.be.productexceljob.service.ProductExcelProcessingService;
 import com.be.productexceljob.service.ProductExcelJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,8 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ProductExcelJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final String ZIP_CONTENT_TYPE = "application/zip";
 
     private final ProductExcelJobService productExcelJobService;
+    private final ProductExcelProcessingService productExcelProcessingService;
 
     @Operation(summary = "상품 엑셀 처리 작업 시작")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -54,6 +58,25 @@ public class ProductExcelJobController {
         ExcelDownloadResult result = productExcelJobService.download(jobId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())
+                .body(new ByteArrayResource(result.content()));
+    }
+
+    @Operation(
+            summary = "상품 이미지 ZIP 다운로드",
+            description = "목록이미지1 컬럼의 이미지 URL을 읽어 이미지를 다운로드하고 ZIP 파일로 반환합니다."
+    )
+    @PostMapping(value = "/images/download-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ByteArrayResource> downloadImagesZip(
+            @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
+            @RequestParam("file") MultipartFile file
+    ) {
+        ImageZipDownloadResult result = productExcelProcessingService.downloadImagesAsZip(file);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(ZIP_CONTENT_TYPE))
+                .header("X-Saved-Image-Count", String.valueOf(result.savedCount()))
+                .header("X-Failed-Image-Count", String.valueOf(result.failedCount()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())
                 .body(new ByteArrayResource(result.content()));
     }

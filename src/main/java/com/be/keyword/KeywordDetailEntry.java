@@ -1,6 +1,6 @@
-package com.be.keywordjob.keyword;
+package com.be.keyword;
 
-import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
+import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
 import java.util.List;
 
 public record KeywordDetailEntry(

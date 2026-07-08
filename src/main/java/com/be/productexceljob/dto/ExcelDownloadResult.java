@@ -1,4 +1,4 @@
-package com.be.keywordjob.dto;
+package com.be.productexceljob.dto;
 
 public record ExcelDownloadResult(
         String filename,

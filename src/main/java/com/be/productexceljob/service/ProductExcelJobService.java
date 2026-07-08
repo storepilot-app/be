@@ -2,10 +2,7 @@ package com.be.productexceljob.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
-import com.be.keywordjob.dto.ExcelDownloadResult;
-import com.be.keywordjob.service.KeywordExcelFillService;
-import com.be.keywordjob.service.KeywordJobUploadService;
-import com.be.keywordjob.service.ProductExcelJobProgressListener;
+import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.domain.ProductExcelJobStatus;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
@@ -29,8 +26,8 @@ public class ProductExcelJobService {
     private static final int KEYWORD_COUNT = 30;
 
     private final ProductExcelJobRepository productExcelJobRepository;
-    private final KeywordJobUploadService keywordJobUploadService;
-    private final KeywordExcelFillService keywordExcelFillService;
+    private final ProductExcelJobRequestValidator productExcelJobRequestValidator;
+    private final ProductExcelProcessingService productExcelProcessingService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
     private final AtomicLong jobIdGenerator = new AtomicLong(1);
@@ -40,7 +37,7 @@ public class ProductExcelJobService {
 
     public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
         String trimmedUserKey = validateAndTrimUserKey(userKey);
-        keywordJobUploadService.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
+        productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
@@ -82,7 +79,7 @@ public class ProductExcelJobService {
     private void process(ProductExcelJob job) {
         job.start();
         try {
-            ExcelDownloadResult result = keywordExcelFillService.fillAndDownload(
+            ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                     job.getUploadedFilePath(),
                     job.getOriginalFilename(),
                     PRODUCT_NAME_COLUMN,

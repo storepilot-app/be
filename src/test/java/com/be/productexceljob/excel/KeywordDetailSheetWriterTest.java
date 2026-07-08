@@ -1,10 +1,10 @@
-package com.be.keywordjob.excel;
+package com.be.productexceljob.excel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import com.be.keywordjob.keyword.KeywordCandidateRanker.ScoredKeyword;
-import com.be.keywordjob.keyword.KeywordDetailEntry;
+import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
+import com.be.keyword.KeywordDetailEntry;
 import java.util.List;
 import java.util.Set;
 import org.apache.poi.ss.usermodel.CellType;
