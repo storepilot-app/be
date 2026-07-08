@@ -271,7 +271,7 @@ public class ProductExcelProcessingService {
             batchNumber++;
             int end = Math.min(start + safeBatchSize, totalCount);
             long batchStartedAt = System.nanoTime();
-            results.putAll(categoryMatcherService.findMyCategoryCodes(products.subList(start, end), userKey));
+            results.putAll(categoryMatcherService.findCategoryMatches(products.subList(start, end), userKey));
             log.info(
                     "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
                     batchNumber,
