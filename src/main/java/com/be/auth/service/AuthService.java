@@ -1,0 +1,106 @@
+package com.be.auth.service;
+
+import com.be.auth.domain.StorePilotUser;
+import com.be.auth.dto.AuthRequest;
+import com.be.auth.dto.AuthResponse;
+import com.be.auth.dto.AuthUserResponse;
+import com.be.auth.dto.LoginResult;
+import com.be.auth.repository.StorePilotUserRepository;
+import com.be.auth.security.JwtTokenProvider;
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
+
+import java.util.Locale;
+import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
+    private final StorePilotUserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenService refreshTokenService;
+
+    @Transactional
+    public LoginResult signup(AuthRequest request) {
+        String email = normalizeEmail(request.email());
+        String password = requirePassword(request.password());
+
+        if (userRepository.existsByEmail(email)) {
+            throw authInvalid("이미 가입된 이메일입니다.");
+        }
+
+        StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password)));
+        return issueLoginResult(user);
+    }
+
+    @Transactional
+    public LoginResult login(AuthRequest request) {
+        String email = normalizeEmail(request.email());
+        String password = request.password() == null ? "" : request.password();
+        StorePilotUser user = userRepository.findByEmail(email)
+                .orElseThrow(() -> authInvalid("이메일 또는 비밀번호가 올바르지 않습니다."));
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw authInvalid("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+        return issueLoginResult(user);
+    }
+
+    public AuthUserResponse toUserResponse(StorePilotUser user) {
+        return new AuthUserResponse(user.getId(), user.getEmail());
+    }
+
+    @Transactional
+    public LoginResult refresh(String refreshToken) {
+        Long userId = refreshTokenService.findActive(refreshToken)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "다시 로그인해주세요."))
+                .getUserId();
+        refreshTokenService.revoke(refreshToken);
+        StorePilotUser user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "다시 로그인해주세요."));
+        return issueLoginResult(user);
+    }
+
+    @Transactional(readOnly = true)
+    public StorePilotUser getRequiredUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "로그인이 필요합니다."));
+    }
+
+    private LoginResult issueLoginResult(StorePilotUser user) {
+        RefreshTokenService.IssuedRefreshToken refreshToken = refreshTokenService.issue(user.getId(), jwtTokenProvider.refreshTokenTtl());
+        return LoginResult.of(
+                jwtTokenProvider.createAccessToken(user),
+                jwtTokenProvider.accessTokenTtl(),
+                refreshToken.token(),
+                refreshToken.ttl(),
+                new AuthResponse(toUserResponse(user))
+        );
+    }
+
+    private String normalizeEmail(String value) {
+        String email = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            throw authInvalid("올바른 이메일을 입력해주세요.");
+        }
+        return email;
+    }
+
+    private String requirePassword(String value) {
+        String password = value == null ? "" : value;
+        if (password.length() < 8) {
+            throw authInvalid("비밀번호는 8자 이상이어야 합니다.");
+        }
+        return password;
+    }
+
+    private BusinessException authInvalid(String message) {
+        return new BusinessException(ErrorCode.AUTH_INVALID, message);
+    }
+}
