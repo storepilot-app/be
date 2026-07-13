@@ -18,20 +18,20 @@ public class MyCategoryMappingQueryService {
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
 
-    public List<MyCategoryMapping> getResolvedMappings(String userKey) {
-        MyCategoryMappingVersion activeVersion = getRequiredActiveVersion(userKey);
+    public List<MyCategoryMapping> getResolvedMappings(Long userId) {
+        MyCategoryMappingVersion activeVersion = getRequiredActiveVersion(userId);
         return myCategoryMappingRepository
-                .findByUserKeyAndVersionId(userKey, activeVersion.getId())
+                .findByUserIdAndVersionId(userId, activeVersion.getId())
                 .stream()
                 .filter(this::hasResolvedNaverCategory)
                 .toList();
     }
 
-    public MyCategoryMapping getRequiredResolvedMapping(String userKey, String myCategoryCode) {
-        MyCategoryMappingVersion activeVersion = getRequiredActiveVersion(userKey);
+    public MyCategoryMapping getRequiredResolvedMapping(Long userId, String myCategoryCode) {
+        MyCategoryMappingVersion activeVersion = getRequiredActiveVersion(userId);
         return myCategoryMappingRepository
-                .findFirstByUserKeyAndVersionIdAndMyCategoryCode(
-                        userKey,
+                .findFirstByUserIdAndVersionIdAndMyCategoryCode(
+                        userId,
                         activeVersion.getId(),
                         myCategoryCode
                 )
@@ -39,9 +39,9 @@ public class MyCategoryMappingQueryService {
                 .orElseThrow(() -> invalid("마이카테고리 코드에 대응하는 네이버 카테고리 매핑이 없습니다."));
     }
 
-    private MyCategoryMappingVersion getRequiredActiveVersion(String userKey) {
+    private MyCategoryMappingVersion getRequiredActiveVersion(Long userId) {
         return myCategoryMappingVersionRepository
-                .findFirstByUserKeyAndActiveTrueOrderByUploadedAtDesc(userKey)
+                .findFirstByUserIdAndActiveTrueOrderByUploadedAtDesc(userId)
                 .orElseThrow(() -> invalid("활성화된 마이카테고리 매핑 버전이 없습니다."));
     }
 

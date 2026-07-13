@@ -28,12 +28,12 @@ public class TrainingProductAiClient {
     private final AiServerProperties aiServerProperties;
 
     public ProductIndexRebuildResponse rebuildProductIndex(
-            String userKey,
+            Long userId,
             List<MultipartFile> files,
             List<CategoryMatchMappingItem> mappings
     ) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("userKey", userKey);
+        body.add("userId", userId);
         try {
             body.add("categoryMappings", OBJECT_MAPPER.writeValueAsString(mappings));
         } catch (JsonProcessingException error) {

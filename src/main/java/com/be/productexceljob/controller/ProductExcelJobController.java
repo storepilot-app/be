@@ -1,5 +1,6 @@
 package com.be.productexceljob.controller;
 
+import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.dto.ImageZipDownloadResult;
@@ -15,6 +16,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,25 +39,30 @@ public class ProductExcelJobController {
     @Operation(summary = "상품 엑셀 처리 작업 시작")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductExcelJobCreateResponse> create(
+            @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "상품 엑셀 파일", required = true)
-            @RequestParam("file") MultipartFile file,
-            @Parameter(description = "마이카테고리 매핑을 조회할 사용자 식별자", required = true)
-            @RequestParam("userKey") String userKey
+            @RequestParam("file") MultipartFile file
     ) {
-        ProductExcelJobCreateResponse response = productExcelJobService.create(file, userKey);
+        ProductExcelJobCreateResponse response = productExcelJobService.create(file, loginUser.id());
         return CommonResponse.success(response, response.message());
     }
 
     @Operation(summary = "상품 엑셀 처리 진행률 조회")
     @GetMapping("/{jobId}/status")
-    public CommonResponse<ProductExcelJobStatusResponse> status(@PathVariable long jobId) {
-        return CommonResponse.success(productExcelJobService.status(jobId));
+    public CommonResponse<ProductExcelJobStatusResponse> status(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable long jobId
+    ) {
+        return CommonResponse.success(productExcelJobService.status(jobId, loginUser.id()));
     }
 
     @Operation(summary = "완료된 상품 엑셀 결과 다운로드")
     @GetMapping("/{jobId}/download")
-    public ResponseEntity<ByteArrayResource> download(@PathVariable long jobId) {
-        ExcelDownloadResult result = productExcelJobService.download(jobId);
+    public ResponseEntity<ByteArrayResource> download(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable long jobId
+    ) {
+        ExcelDownloadResult result = productExcelJobService.download(jobId, loginUser.id());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())

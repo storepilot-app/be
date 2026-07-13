@@ -114,7 +114,7 @@ public class ProductExcelProcessingService {
             String productNameColumn,
             String categoryColumn,
             Integer keywordCount,
-            String userKey,
+            Long userId,
             ProductExcelJobProgressListener progressListener
     ) {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
@@ -124,7 +124,7 @@ public class ProductExcelProcessingService {
                     productNameColumn,
                     categoryColumn,
                     keywordCount,
-                    userKey,
+                    userId,
                     progressListener
             );
         } catch (IOException e) {
@@ -138,7 +138,7 @@ public class ProductExcelProcessingService {
             String productNameColumn,
             String categoryColumn,
             Integer keywordCount,
-            String userKey,
+            Long userId,
             ProductExcelJobProgressListener progressListener
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
@@ -183,7 +183,7 @@ public class ProductExcelProcessingService {
             long categoryStartedAt = System.nanoTime();
             Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
                     products,
-                    userKey,
+                    userId,
                     progressListener
             );
             progressListener.onCategoryCompleted(elapsedMillis(categoryStartedAt));
@@ -257,7 +257,7 @@ public class ProductExcelProcessingService {
 
     private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
             List<CategoryMatchProductRequest> products,
-            String userKey,
+            Long userId,
             ProductExcelJobProgressListener progressListener
     ) {
         Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
@@ -271,7 +271,7 @@ public class ProductExcelProcessingService {
             batchNumber++;
             int end = Math.min(start + safeBatchSize, totalCount);
             long batchStartedAt = System.nanoTime();
-            results.putAll(categoryMatcherService.findCategoryMatches(products.subList(start, end), userKey));
+            results.putAll(categoryMatcherService.findCategoryMatches(products.subList(start, end), userId));
             log.info(
                     "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
                     batchNumber,

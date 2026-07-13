@@ -7,13 +7,13 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MyCategoryMappingRepository extends JpaRepository<MyCategoryMapping, Long> {
-    List<MyCategoryMapping> findByUserKeyAndVersionId(String userKey, Long versionId);
+    List<MyCategoryMapping> findByUserIdAndVersionId(Long userId, Long versionId);
 
-    Optional<MyCategoryMapping> findFirstByUserKeyAndVersionIdAndMyCategoryCode(String userKey, Long versionId, String myCategoryCode);
+    Optional<MyCategoryMapping> findFirstByUserIdAndVersionIdAndMyCategoryCode(Long userId, Long versionId, String myCategoryCode);
 
-    List<MyCategoryMapping> findByUserKeyAndNaverCategoryCodeIn(String userKey, Collection<String> naverCategoryCodes);
+    List<MyCategoryMapping> findByUserIdAndNaverCategoryCodeIn(Long userId, Collection<String> naverCategoryCodes);
 
     long countByVersionId(Long versionId);
 
-    void deleteByUserKey(String userKey);
+    void deleteByUserId(Long userId);
 }

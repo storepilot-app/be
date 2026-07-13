@@ -42,15 +42,15 @@ public class MyCategoryMappingUploadService {
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
 
     @Transactional
-    public MyCategoryMappingVersion upload(MultipartFile file, String userKey) {
+    public MyCategoryMappingVersion upload(MultipartFile file, Long userId) {
         validateFile(file);
-        String trimmedUserKey = validateAndTrimUserKey(userKey);
+        validateUserId(userId);
         String filename = safeFilename(file.getOriginalFilename());
         Map<String, NaverCategory> naverCategoriesByCode = loadRequiredActiveNaverCategoriesByCode();
 
         MyCategoryMappingParseResult parseResult = parseMappings(
                 file,
-                trimmedUserKey,
+                userId,
                 naverCategoriesByCode
         );
         List<MyCategoryMapping> mappings = parseResult.mappings();
@@ -60,9 +60,9 @@ public class MyCategoryMappingUploadService {
 
         logParseResult(parseResult);
 
-        replaceExistingMappings(trimmedUserKey);
+        replaceExistingMappings(userId);
         MyCategoryMappingVersion version = myCategoryMappingVersionRepository.save(MyCategoryMappingVersion.createActive(
-                trimmedUserKey,
+                userId,
                 filename,
                 parseResult.sourceRowCount(),
                 mappings.size(),
@@ -77,9 +77,9 @@ public class MyCategoryMappingUploadService {
         return version;
     }
 
-    private void replaceExistingMappings(String userKey) {
-        myCategoryMappingRepository.deleteByUserKey(userKey);
-        myCategoryMappingVersionRepository.deleteByUserKey(userKey);
+    private void replaceExistingMappings(Long userId) {
+        myCategoryMappingRepository.deleteByUserId(userId);
+        myCategoryMappingVersionRepository.deleteByUserId(userId);
     }
 
     private void logParseResult(MyCategoryMappingParseResult parseResult) {
@@ -95,7 +95,7 @@ public class MyCategoryMappingUploadService {
 
     private MyCategoryMappingParseResult parseMappings(
             MultipartFile file,
-            String userKey,
+            Long userId,
             Map<String, NaverCategory> naverCategoriesByCode
     ) {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
@@ -124,7 +124,7 @@ public class MyCategoryMappingUploadService {
                 NaverCategory naverCategory = naverCategoriesByCode.get(naverCategoryCode);
 
                 MyCategoryMapping mapping = MyCategoryMapping.create(
-                        userKey,
+                        userId,
                         myCategoryCode,
                         naverCategoryCode,
                         naverCategory == null ? null : naverCategory.getId(),
@@ -204,11 +204,10 @@ public class MyCategoryMappingUploadService {
         }
     }
 
-    private String validateAndTrimUserKey(String userKey) {
-        if (userKey == null || userKey.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "사용자 식별자는 필수입니다.");
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, "로그인이 필요합니다.");
         }
-        return userKey.trim();
     }
 
     private boolean isExcelFilename(String filename) {

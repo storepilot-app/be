@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "my_category_mapping_versions",
         indexes = {
-                @Index(name = "idx_my_category_mapping_versions_user_active", columnList = "user_key, active")
+                @Index(name = "idx_my_category_mapping_versions_user_active", columnList = "user_id, active")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -28,8 +28,8 @@ public class MyCategoryMappingVersion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_key", nullable = false, length = 100)
-    private String userKey;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @Column(name = "source_filename", nullable = false)
     private String sourceFilename;
@@ -53,7 +53,7 @@ public class MyCategoryMappingVersion {
     private boolean active;
 
     private MyCategoryMappingVersion(
-            String userKey,
+            Long userId,
             String sourceFilename,
             int rowCount,
             int mappingCount,
@@ -61,7 +61,7 @@ public class MyCategoryMappingVersion {
             Instant uploadedAt,
             boolean active
     ) {
-        this.userKey = userKey;
+        this.userId = userId;
         this.sourceFilename = sourceFilename;
         this.rowCount = rowCount;
         this.mappingCount = mappingCount;
@@ -72,7 +72,7 @@ public class MyCategoryMappingVersion {
     }
 
     public static MyCategoryMappingVersion createActive(
-            String userKey,
+            Long userId,
             String sourceFilename,
             int rowCount,
             int mappingCount,
@@ -80,7 +80,7 @@ public class MyCategoryMappingVersion {
             Instant uploadedAt
     ) {
         return new MyCategoryMappingVersion(
-                userKey,
+                userId,
                 sourceFilename,
                 rowCount,
                 mappingCount,

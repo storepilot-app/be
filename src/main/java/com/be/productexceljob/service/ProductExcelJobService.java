@@ -35,8 +35,8 @@ public class ProductExcelJobService {
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public ProductExcelJobCreateResponse create(MultipartFile file, String userKey) {
-        String trimmedUserKey = validateAndTrimUserKey(userKey);
+    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId) {
+        validateUserId(userId);
         productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
         long jobId = jobIdGenerator.getAndIncrement();
@@ -53,7 +53,7 @@ public class ProductExcelJobService {
 
         ProductExcelJob job = productExcelJobRepository.save(ProductExcelJob.register(
                 jobId,
-                trimmedUserKey,
+                userId,
                 filename,
                 targetPath
         ));
@@ -61,13 +61,17 @@ public class ProductExcelJobService {
         return ProductExcelJobCreateResponse.from(job);
     }
 
-    public ProductExcelJobStatusResponse status(long jobId) {
-        ProductExcelJob job = findJob(jobId);
+    public ProductExcelJobStatusResponse status(long jobId, Long userId) {
+        ProductExcelJob job = findJob(jobId, userId);
         return ProductExcelJobStatusResponse.from(job);
     }
 
-    public ExcelDownloadResult download(long jobId) {
-        ProductExcelJob job = findJob(jobId);
+    public ExcelDownloadResult download(long jobId, Long userId) {
+        ProductExcelJob job = findJob(jobId, userId);
+        return download(job);
+    }
+
+    private ExcelDownloadResult download(ProductExcelJob job) {
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {
@@ -85,7 +89,7 @@ public class ProductExcelJobService {
                     PRODUCT_NAME_COLUMN,
                     "",
                     KEYWORD_COUNT,
-                    job.getUserKey(),
+                    job.getUserId(),
                     new ProductExcelJobProgressListener() {
                         @Override
                         public void onProgress(int processedCount, int totalCount, String stage) {
@@ -112,20 +116,15 @@ public class ProductExcelJobService {
         }
     }
 
-    private ProductExcelJob findJob(long jobId) {
-        return productExcelJobRepository.findById(jobId)
+    private ProductExcelJob findJob(long jobId, Long userId) {
+        return productExcelJobRepository.findByIdAndUserId(jobId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
     }
 
-    private String validateAndTrimUserKey(String userKey) {
-        return required(userKey, "사용자 식별자를 입력해주세요.");
-    }
-
-    private String required(String value, String message) {
-        if (value == null || value.isBlank()) {
-            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, message);
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, "로그인이 필요합니다.");
         }
-        return value.trim();
     }
 
     private String safeFilename(String filename) {

@@ -17,8 +17,8 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "product_category_feedback",
         indexes = {
-                @Index(name = "idx_product_feedback_user_created", columnList = "user_key, created_at"), //사용자별 피드백 이력을 최신순으로 조회할 때 유용
-                @Index(name = "idx_product_feedback_my_category", columnList = "user_key, my_category_code") //사용자마다 번호 체계가 다르므로 user_key와 함께 조회
+                @Index(name = "idx_product_feedback_user_created", columnList = "user_id, created_at"),
+                @Index(name = "idx_product_feedback_my_category", columnList = "user_id, my_category_code")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -27,8 +27,8 @@ public class ProductCategoryFeedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_key", nullable = false, length = 100)
-    private String userKey;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @Column(name = "product_name", nullable = false, length = 1000)
     private String productName;
@@ -49,7 +49,7 @@ public class ProductCategoryFeedback {
     private Instant createdAt;
 
     private ProductCategoryFeedback(
-            String userKey,
+            Long userId,
             String productName,
             String myCategoryCode,
             Long naverCategoryId,
@@ -57,7 +57,7 @@ public class ProductCategoryFeedback {
             String naverCategoryFullPath,
             Instant createdAt
     ) {
-        this.userKey = userKey;
+        this.userId = userId;
         this.productName = productName;
         this.myCategoryCode = myCategoryCode;
         this.naverCategoryId = naverCategoryId;
@@ -67,7 +67,7 @@ public class ProductCategoryFeedback {
     }
 
     public static ProductCategoryFeedback create(
-            String userKey,
+            Long userId,
             String productName,
             String myCategoryCode,
             Long naverCategoryId,
@@ -76,7 +76,7 @@ public class ProductCategoryFeedback {
             Instant createdAt
     ) {
         return new ProductCategoryFeedback(
-                userKey,
+                userId,
                 productName,
                 myCategoryCode,
                 naverCategoryId,

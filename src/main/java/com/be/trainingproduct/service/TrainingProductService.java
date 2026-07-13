@@ -28,33 +28,33 @@ public class TrainingProductService {
     private final MyCategoryMappingQueryService myCategoryMappingQueryService;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
 
-    public ProductIndexRebuildResponse rebuildIndex(String userKey, List<MultipartFile> files) {
-        String trimmedUserKey = validateAndTrimUserKey(userKey);
+    public ProductIndexRebuildResponse rebuildIndex(Long userId, List<MultipartFile> files) {
+        validateUserId(userId);
         validateFiles(files);
         List<CategoryMatchMappingItem> mappings = myCategoryMappingQueryService
-                .getResolvedMappings(trimmedUserKey)
+                .getResolvedMappings(userId)
                 .stream()
                 .map(CategoryMatchMappingItem::from)
                 .toList();
         if (mappings.isEmpty()) {
             throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
         }
-        return trainingProductAiClient.rebuildProductIndex(trimmedUserKey, files, mappings);
+        return trainingProductAiClient.rebuildProductIndex(userId, files, mappings);
     }
 
     @Transactional
-    public ProductCategoryFeedbackResponse addFeedback(ProductCategoryFeedbackRequest request) {
+    public ProductCategoryFeedbackResponse addFeedback(Long userId, ProductCategoryFeedbackRequest request) {
         if (request == null) {
             throw invalid("피드백 요청 정보가 필요합니다.");
         }
-        String userKey = validateAndTrimUserKey(request.userKey());
+        validateUserId(userId);
         String productName = required(request.productName(), "상품명은 필수입니다.");
         String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
         MyCategoryMapping mapping = myCategoryMappingQueryService
-                .getRequiredResolvedMapping(userKey, myCategoryCode);
+                .getRequiredResolvedMapping(userId, myCategoryCode);
 
         ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
-                userKey,
+                userId,
                 productName,
                 myCategoryCode,
                 mapping.getNaverCategoryId(),
@@ -90,8 +90,10 @@ public class TrainingProductService {
         return filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
     }
 
-    private String validateAndTrimUserKey(String value) {
-        return required(value, "사용자 식별자는 필수입니다.");
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw invalid("로그인이 필요합니다.");
+        }
     }
 
     private String required(String value, String message) {

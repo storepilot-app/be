@@ -1,5 +1,6 @@
 package com.be.mycategory.controller;
 
+import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.mycategory.domain.MyCategoryMappingVersion;
 import com.be.mycategory.dto.MyCategoryMappingUploadResponse;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -32,12 +34,11 @@ public class MyCategoryMappingController {
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<MyCategoryMappingUploadResponse> upload(
-            @Parameter(description = "사용자별 마이카테고리 번호 체계를 구분할 사용자 식별자", example = "user-a", required = true)
-            @RequestParam("userKey") String userKey,
+            @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). A열은 마이카테고리, H열은 네이버 카테고리 코드입니다.", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, userKey);
+        MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, loginUser.id());
         MyCategoryMappingUploadResponse response = MyCategoryMappingUploadResponse.from(version);
         return CommonResponse.success(response, response.message());
     }

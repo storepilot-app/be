@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "기존 상품 FAISS 인덱스 재생성 결과")
 public record ProductIndexRebuildResponse(
-        @Schema(description = "마이카테고리 매핑에 사용한 사용자 식별자") String userKey,
+        @Schema(description = "마이카테고리 매핑에 사용한 사용자 ID") Long userId,
         @Schema(description = "업로드한 엑셀 파일 수") int sourceCount,
         @Schema(description = "엑셀에서 읽은 전체 상품 행 수") int sourceRowCount,
         @Schema(description = "카테고리 매핑에 성공한 유효 행 수") int validRowCount,

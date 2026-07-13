@@ -19,11 +19,11 @@ import lombok.NoArgsConstructor;
         indexes = {
                 @Index(
                         name = "idx_my_category_mappings_user_version",
-                        columnList = "user_key, version_id"
+                        columnList = "user_id, version_id"
                 ),
                 @Index(
                         name = "idx_my_category_mappings_user_naver_code",
-                        columnList = "user_key, naver_category_code"
+                        columnList = "user_id, naver_category_code"
                 )
         },
         uniqueConstraints = {
@@ -42,8 +42,8 @@ public class MyCategoryMapping {
     @Column(name = "version_id", nullable = false)
     private Long versionId;
 
-    @Column(name = "user_key", nullable = false, length = 100)
-    private String userKey;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @Column(name = "my_category_code", nullable = false, length = 100)
     private String myCategoryCode;
@@ -62,7 +62,7 @@ public class MyCategoryMapping {
 
     private MyCategoryMapping(
             Long versionId,
-            String userKey,
+            Long userId,
             String myCategoryCode,
             String naverCategoryValue,
             Long naverCategoryId,
@@ -70,7 +70,7 @@ public class MyCategoryMapping {
             String naverCategoryFullPath
     ) {
         this.versionId = versionId;
-        this.userKey = userKey;
+        this.userId = userId;
         this.myCategoryCode = myCategoryCode;
         this.naverCategoryValue = naverCategoryValue;
         this.naverCategoryId = naverCategoryId;
@@ -79,7 +79,7 @@ public class MyCategoryMapping {
     }
 
     public static MyCategoryMapping create(
-            String userKey,
+            Long userId,
             String myCategoryCode,
             String naverCategoryValue,
             Long naverCategoryId,
@@ -88,7 +88,7 @@ public class MyCategoryMapping {
     ) {
         return new MyCategoryMapping(
                 null,
-                userKey,
+                userId,
                 myCategoryCode,
                 naverCategoryValue,
                 naverCategoryId,

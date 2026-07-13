@@ -1,7 +1,7 @@
 package com.be.trainingproduct.dto;
 
 public record ProductFeedbackAiResponse(
-        String userKey,
+        Long userId,
         int indexedProductCount,
         String message
 ) {

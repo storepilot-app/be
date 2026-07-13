@@ -7,8 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record MyCategoryMappingUploadResponse(
         @Schema(description = "매핑 버전 ID", example = "1")
         Long versionId,
-        @Schema(description = "사용자 식별자", example = "user-a")
-        String userKey,
+        @Schema(description = "사용자 ID", example = "1")
+        Long userId,
         @Schema(description = "업로드한 원본 파일명", example = "my_categories.xlsx")
         String sourceFilename,
         @Schema(description = "엑셀에서 해석한 행 수", example = "120")
@@ -23,7 +23,7 @@ public record MyCategoryMappingUploadResponse(
     public static MyCategoryMappingUploadResponse from(MyCategoryMappingVersion version) {
         return new MyCategoryMappingUploadResponse(
                 version.getId(),
-                version.getUserKey(),
+                version.getUserId(),
                 version.getSourceFilename(),
                 version.getRowCount(),
                 version.getMappingCount(),

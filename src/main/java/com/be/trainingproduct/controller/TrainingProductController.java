@@ -1,5 +1,6 @@
 package com.be.trainingproduct.controller;
 
+import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,12 +33,11 @@ public class TrainingProductController {
     )
     @PostMapping(value = "/rebuild", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexRebuildResponse> rebuild(
-            @Parameter(description = "마이카테고리 매핑을 조회할 사용자 식별자", example = "uno1969", required = true)
-            @RequestParam("userKey") String userKey,
+            @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
             @RequestParam("files") List<MultipartFile> files
     ) {
-        ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(userKey, files);
+        ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
         return CommonResponse.success(response, response.message());
     }
 
@@ -46,9 +47,10 @@ public class TrainingProductController {
     )
     @PostMapping(value = "/feedback", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CommonResponse<ProductCategoryFeedbackResponse> feedback(
+            @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody ProductCategoryFeedbackRequest request
     ) {
-        ProductCategoryFeedbackResponse response = trainingProductService.addFeedback(request);
+        ProductCategoryFeedbackResponse response = trainingProductService.addFeedback(loginUser.id(), request);
         return CommonResponse.success(response, response.message());
     }
 }

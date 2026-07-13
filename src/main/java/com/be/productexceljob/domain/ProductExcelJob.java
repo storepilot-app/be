@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public class ProductExcelJob {
     private final long jobId;
-    private final String userKey;
+    private final Long userId;
     private final String originalFilename;
     private final Path uploadedFilePath;
     private final Instant createdAt;
@@ -20,9 +20,9 @@ public class ProductExcelJob {
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
-    private ProductExcelJob(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
+    private ProductExcelJob(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
         this.jobId = jobId;
-        this.userKey = userKey;
+        this.userId = userId;
         this.originalFilename = originalFilename;
         this.uploadedFilePath = uploadedFilePath;
         this.createdAt = Instant.now();
@@ -31,8 +31,8 @@ public class ProductExcelJob {
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
     }
 
-    public static ProductExcelJob register(long jobId, String userKey, String originalFilename, Path uploadedFilePath) {
-        return new ProductExcelJob(jobId, userKey, originalFilename, uploadedFilePath);
+    public static ProductExcelJob register(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
+        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath);
     }
 
     public synchronized void start() {
@@ -80,8 +80,8 @@ public class ProductExcelJob {
         return jobId;
     }
 
-    public String getUserKey() {
-        return userKey;
+    public Long getUserId() {
+        return userId;
     }
 
     public String getOriginalFilename() {

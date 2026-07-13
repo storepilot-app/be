@@ -3,7 +3,7 @@ package com.be.trainingproduct.dto;
 import com.be.trainingproduct.domain.ProductCategoryFeedback;
 
 public record ProductFeedbackAiRequest(
-        String userKey,
+        Long userId,
         String productName,
         Long categoryId,
         String categoryCode,
@@ -11,7 +11,7 @@ public record ProductFeedbackAiRequest(
 ) {
     public static ProductFeedbackAiRequest from(ProductCategoryFeedback feedback) {
         return new ProductFeedbackAiRequest(
-                feedback.getUserKey(),
+                feedback.getUserId(),
                 feedback.getProductName(),
                 feedback.getNaverCategoryId(),
                 feedback.getNaverCategoryCode(),

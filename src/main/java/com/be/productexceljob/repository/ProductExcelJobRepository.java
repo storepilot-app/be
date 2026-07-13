@@ -18,4 +18,9 @@ public class ProductExcelJobRepository {
     public Optional<ProductExcelJob> findById(long jobId) {
         return Optional.ofNullable(jobs.get(jobId));
     }
+
+    public Optional<ProductExcelJob> findByIdAndUserId(long jobId, Long userId) {
+        return findById(jobId)
+                .filter(job -> job.getUserId().equals(userId));
+    }
 }

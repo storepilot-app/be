@@ -34,17 +34,16 @@ public class CategoryMatcherService {
 
     public Map<Integer, MyCategoryMatchResult> findCategoryMatches(
             List<CategoryMatchProductRequest> products,
-            String userKey
+            Long userId
     ) {
         if (products == null || products.isEmpty()) {
             return Collections.emptyMap();
         }
 
         Map<Integer, MyCategoryMatchResult> defaultResults = createDefaultResults(products);
-        if (userKey == null || userKey.isBlank()) {
+        if (userId == null) {
             return defaultResults;
         }
-        String trimmedUserKey = userKey.trim();
 
         Optional<ActiveNaverCategories> activeCategories = loadActiveNaverCategories();
         if (activeCategories.isEmpty()) {
@@ -66,7 +65,7 @@ public class CategoryMatcherService {
                 categoriesById
         );
         Map<String, MyCategoryMapping> mappingsByNaverCategoryCode = loadMappingsByNaverCategoryCode(
-                trimmedUserKey,
+                userId,
                 matchedCategoriesByRowId.values()
         );
 
@@ -227,7 +226,7 @@ public class CategoryMatcherService {
     }
 
     private Map<String, MyCategoryMapping> loadMappingsByNaverCategoryCode(
-            String userKey,
+            Long userId,
             Iterable<NaverCategory> categories
     ) {
         Set<String> naverCategoryCodes = new HashSet<>();
@@ -240,7 +239,7 @@ public class CategoryMatcherService {
             return Collections.emptyMap();
         }
 
-        return myCategoryMappingRepository.findByUserKeyAndNaverCategoryCodeIn(userKey, naverCategoryCodes)
+        return myCategoryMappingRepository.findByUserIdAndNaverCategoryCodeIn(userId, naverCategoryCodes)
                 .stream()
                 .filter(mapping -> mapping.getNaverCategoryCode() != null && !mapping.getNaverCategoryCode().isBlank())
                 .collect(Collectors.toMap(
