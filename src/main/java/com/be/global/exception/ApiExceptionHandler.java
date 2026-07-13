@@ -12,13 +12,22 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 public class ApiExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<CommonResponse<Void>> handleBusinessException(BusinessException exception) {
-        HttpStatus status = exception.getErrorCode() == ErrorCode.INVALID_EXCEL_FILE
-                || exception.getErrorCode() == ErrorCode.INVALID_NAVER_CATEGORY_FILE
-                || exception.getErrorCode() == ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE
-                ? HttpStatus.BAD_REQUEST
-                : HttpStatus.UNPROCESSABLE_ENTITY;
+        HttpStatus status = resolveStatus(exception.getErrorCode());
         return ResponseEntity.status(status)
                 .body(CommonResponse.fail(exception.getErrorCode().name(), exception.getMessage()));
+    }
+
+    private HttpStatus resolveStatus(ErrorCode errorCode) {
+        if (errorCode == ErrorCode.INVALID_EXCEL_FILE
+                || errorCode == ErrorCode.INVALID_NAVER_CATEGORY_FILE
+                || errorCode == ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE
+                || errorCode == ErrorCode.AUTH_INVALID) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        if (errorCode == ErrorCode.AUTH_UNAUTHORIZED) {
+            return HttpStatus.UNAUTHORIZED;
+        }
+        return HttpStatus.UNPROCESSABLE_ENTITY;
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
