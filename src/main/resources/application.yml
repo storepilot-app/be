@@ -20,8 +20,15 @@ spring:
 
 storepilot:
   upload-dir: uploads
+  auth:
+    jwt-secret: ${STOREPILOT_AUTH_JWT_SECRET}
+    access-token-minutes: ${STOREPILOT_AUTH_ACCESS_TOKEN_MINUTES}
+    refresh-token-days: ${STOREPILOT_AUTH_REFRESH_TOKEN_DAYS}
+    cookie-secure: ${STOREPILOT_AUTH_COOKIE_SECURE}
+    cookie-same-site: ${STOREPILOT_AUTH_COOKIE_SAME_SITE}
+    allowed-origins: ${STOREPILOT_AUTH_ALLOWED_ORIGINS}
   ai:
-    base-url: ${AI_SERVER_BASE_URL:http://127.0.0.1:8000}
+    base-url: ${AI_SERVER_BASE_URL}
   category:
     batch-size: 300
 
