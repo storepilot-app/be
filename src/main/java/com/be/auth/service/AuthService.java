@@ -53,7 +53,7 @@ public class AuthService {
     }
 
     public AuthUserResponse toUserResponse(StorePilotUser user) {
-        return new AuthUserResponse(user.getId(), user.getEmail());
+        return new AuthUserResponse(user.getId(), user.getEmail(), user.getRole().name());
     }
 
     @Transactional
