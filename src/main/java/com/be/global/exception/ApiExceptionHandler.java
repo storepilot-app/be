@@ -27,6 +27,9 @@ public class ApiExceptionHandler {
         if (errorCode == ErrorCode.AUTH_UNAUTHORIZED) {
             return HttpStatus.UNAUTHORIZED;
         }
+        if (errorCode == ErrorCode.AUTH_FORBIDDEN) {
+            return HttpStatus.FORBIDDEN;
+        }
         return HttpStatus.UNPROCESSABLE_ENTITY;
     }
 

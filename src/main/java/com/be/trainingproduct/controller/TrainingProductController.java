@@ -1,6 +1,9 @@
 package com.be.trainingproduct.controller;
 
+import com.be.auth.domain.UserRole;
 import com.be.auth.security.LoginUser;
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
@@ -37,6 +40,7 @@ public class TrainingProductController {
             @Parameter(description = "기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
             @RequestParam("files") List<MultipartFile> files
     ) {
+        requireAdmin(loginUser);
         ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
         return CommonResponse.success(response, response.message());
     }
@@ -52,5 +56,11 @@ public class TrainingProductController {
     ) {
         ProductCategoryFeedbackResponse response = trainingProductService.addFeedback(loginUser.id(), request);
         return CommonResponse.success(response, response.message());
+    }
+
+    private void requireAdmin(LoginUser loginUser) {
+        if (loginUser == null || loginUser.role() != UserRole.ADMIN) {
+            throw new BusinessException(ErrorCode.AUTH_FORBIDDEN, "관리자만 사용할 수 있는 기능입니다.");
+        }
     }
 }

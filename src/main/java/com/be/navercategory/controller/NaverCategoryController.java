@@ -1,5 +1,9 @@
 package com.be.navercategory.controller;
 
+import com.be.auth.domain.UserRole;
+import com.be.auth.security.LoginUser;
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
 import com.be.global.response.CommonResponse;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.dto.NaverCategoryUploadResponse;
@@ -9,6 +13,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,11 +33,19 @@ public class NaverCategoryController {
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<NaverCategoryUploadResponse> upload(
+            @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "네이버 카테고리 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
+        requireAdmin(loginUser);
         NaverCategoryVersion version = naverCategoryUploadService.upload(file);
         NaverCategoryUploadResponse response = NaverCategoryUploadResponse.from(version);
         return CommonResponse.success(response, response.message());
+    }
+
+    private void requireAdmin(LoginUser loginUser) {
+        if (loginUser == null || loginUser.role() != UserRole.ADMIN) {
+            throw new BusinessException(ErrorCode.AUTH_FORBIDDEN, "관리자만 사용할 수 있는 기능입니다.");
+        }
     }
 }
