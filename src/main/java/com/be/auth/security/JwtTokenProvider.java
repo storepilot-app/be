@@ -2,6 +2,7 @@ package com.be.auth.security;
 
 import com.be.auth.config.AuthProperties;
 import com.be.auth.domain.StorePilotUser;
+import com.be.auth.domain.UserRole;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +35,7 @@ public class JwtTokenProvider {
                 Map.of(
                         "sub", String.valueOf(user.getId()),
                         "email", user.getEmail(),
-                        "role", user.getRole(),
+                        "role", user.getRole().name(),
                         "type", "access",
                         "iat", now.getEpochSecond(),
                         "exp", now.plus(accessTokenTtl()).getEpochSecond()
@@ -54,7 +55,7 @@ public class JwtTokenProvider {
         return new LoginUser(
                 Long.valueOf(String.valueOf(claims.get("sub"))),
                 String.valueOf(claims.get("email")),
-                String.valueOf(claims.get("role"))
+                UserRole.valueOf(String.valueOf(claims.get("role")))
         );
     }
 

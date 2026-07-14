@@ -2,6 +2,8 @@ package com.be.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,12 +35,13 @@ public class StorePilotUser {
     private String passwordHash;
 
     @Column(nullable = false, length = 30)
-    private String role;
+    @Enumerated(EnumType.STRING)
+    private UserRole role;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    private StorePilotUser(String email, String passwordHash, String role, Instant createdAt) {
+    private StorePilotUser(String email, String passwordHash, UserRole role, Instant createdAt) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
@@ -46,6 +49,6 @@ public class StorePilotUser {
     }
 
     public static StorePilotUser create(String email, String passwordHash) {
-        return new StorePilotUser(email, passwordHash, "USER", Instant.now());
+        return new StorePilotUser(email, passwordHash, UserRole.USER, Instant.now());
     }
 }
