@@ -31,6 +31,7 @@ public class AuthService {
     public LoginResult signup(AuthRequest request) {
         String email = normalizeEmail(request.email());
         String password = requirePassword(request.password());
+        requirePasswordConfirm(password, request.passwordConfirm());
 
         if (userRepository.existsByEmail(email)) {
             throw authInvalid("이미 가입된 이메일입니다.");
@@ -98,6 +99,12 @@ public class AuthService {
             throw authInvalid("비밀번호는 8자 이상이어야 합니다.");
         }
         return password;
+    }
+
+    private void requirePasswordConfirm(String password, String passwordConfirm) {
+        if (!password.equals(passwordConfirm == null ? "" : passwordConfirm)) {
+            throw authInvalid("비밀번호 확인이 일치하지 않습니다.");
+        }
     }
 
     private BusinessException authInvalid(String message) {
