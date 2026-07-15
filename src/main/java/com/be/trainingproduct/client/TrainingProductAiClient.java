@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -52,8 +53,7 @@ public class TrainingProductAiClient {
                     .accept(MediaType.APPLICATION_JSON)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(body)
-                    .retrieve()
-                    .body(byte[].class);
+                    .exchange((request, response) -> readResponseBytes(response));
             ProductIndexRebuildResponse response = readJsonResponse(responseBody, ProductIndexRebuildResponse.class);
             if (response == null) {
                 throw new BusinessException(
@@ -66,6 +66,11 @@ public class TrainingProductAiClient {
             throw new BusinessException(
                     ErrorCode.CATEGORY_MATCHING_FAILED,
                     "기존 상품 인덱스를 재생성하지 못했습니다: " + summarizeResponse(error)
+            );
+        } catch (AiServerResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스를 재생성하지 못했습니다: " + summarizeAiServerResponse(error)
             );
         } catch (RestClientException error) {
             throw new BusinessException(
@@ -81,8 +86,7 @@ public class TrainingProductAiClient {
                     .uri("/ai/categories/product-index/feedback")
                     .accept(MediaType.APPLICATION_JSON)
                     .body(request)
-                    .retrieve()
-                    .body(byte[].class);
+                    .exchange((httpRequest, response) -> readResponseBytes(response));
             ProductFeedbackAiResponse response = readJsonResponse(responseBody, ProductFeedbackAiResponse.class);
             if (response == null) {
                 throw new BusinessException(
@@ -96,6 +100,11 @@ public class TrainingProductAiClient {
                     ErrorCode.CATEGORY_MATCHING_FAILED,
                     "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeResponse(error)
             );
+        } catch (AiServerResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeAiServerResponse(error)
+            );
         } catch (RestClientException error) {
             throw new BusinessException(
                     ErrorCode.CATEGORY_MATCHING_FAILED,
@@ -106,6 +115,14 @@ public class TrainingProductAiClient {
 
     private RestClient restClient() {
         return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
+    }
+
+    private byte[] readResponseBytes(ClientHttpResponse response) throws IOException {
+        byte[] body = response.getBody().readAllBytes();
+        if (response.getStatusCode().isError()) {
+            throw new AiServerResponseException(response.getStatusCode().toString(), body);
+        }
+        return body;
     }
 
     private <T> T readJsonResponse(byte[] body, Class<T> responseType) {
@@ -130,6 +147,13 @@ public class TrainingProductAiClient {
         return abbreviate(body);
     }
 
+    private String summarizeAiServerResponse(AiServerResponseException error) {
+        if (error.body().length == 0) {
+            return error.status();
+        }
+        return error.status() + " " + abbreviate(new String(error.body()));
+    }
+
     private String summarizeMessage(Exception error) {
         String message = error.getMessage();
         if (message == null || message.isBlank()) {
@@ -144,5 +168,23 @@ public class TrainingProductAiClient {
             return normalized;
         }
         return normalized.substring(0, 300) + "...";
+    }
+
+    private static class AiServerResponseException extends RuntimeException {
+        private final String status;
+        private final byte[] body;
+
+        private AiServerResponseException(String status, byte[] body) {
+            this.status = status;
+            this.body = body == null ? new byte[0] : body;
+        }
+
+        private String status() {
+            return status;
+        }
+
+        private byte[] body() {
+            return body;
+        }
     }
 }
