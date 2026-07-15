@@ -9,6 +9,7 @@ import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -46,12 +47,14 @@ public class TrainingProductAiClient {
         files.forEach(file -> body.add("files", file.getResource()));
 
         try {
-            ProductIndexRebuildResponse response = restClient().post()
+            byte[] responseBody = restClient().post()
                     .uri("/ai/categories/product-index/rebuild")
+                    .accept(MediaType.APPLICATION_JSON)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(body)
                     .retrieve()
-                    .body(ProductIndexRebuildResponse.class);
+                    .body(byte[].class);
+            ProductIndexRebuildResponse response = readJsonResponse(responseBody, ProductIndexRebuildResponse.class);
             if (response == null) {
                 throw new BusinessException(
                         ErrorCode.CATEGORY_MATCHING_FAILED,
@@ -74,11 +77,13 @@ public class TrainingProductAiClient {
 
     public ProductFeedbackAiResponse addProductFeedback(ProductFeedbackAiRequest request) {
         try {
-            ProductFeedbackAiResponse response = restClient().post()
+            byte[] responseBody = restClient().post()
                     .uri("/ai/categories/product-index/feedback")
+                    .accept(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
-                    .body(ProductFeedbackAiResponse.class);
+                    .body(byte[].class);
+            ProductFeedbackAiResponse response = readJsonResponse(responseBody, ProductFeedbackAiResponse.class);
             if (response == null) {
                 throw new BusinessException(
                         ErrorCode.CATEGORY_MATCHING_FAILED,
@@ -101,6 +106,20 @@ public class TrainingProductAiClient {
 
     private RestClient restClient() {
         return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
+    }
+
+    private <T> T readJsonResponse(byte[] body, Class<T> responseType) {
+        if (body == null || body.length == 0) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(body, responseType);
+        } catch (IOException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "AI 서버 응답을 해석하지 못했습니다: " + summarizeMessage(error)
+            );
+        }
     }
 
     private String summarizeResponse(RestClientResponseException error) {
