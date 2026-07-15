@@ -17,6 +17,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.multipart.MultipartFile;
 
 @Component
@@ -58,10 +59,15 @@ public class TrainingProductAiClient {
                 );
             }
             return response;
+        } catch (RestClientResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스를 재생성하지 못했습니다: " + summarizeResponse(error)
+            );
         } catch (RestClientException error) {
             throw new BusinessException(
                     ErrorCode.CATEGORY_MATCHING_FAILED,
-                    "기존 상품 인덱스를 재생성하지 못했습니다."
+                    "기존 상품 인덱스를 재생성하지 못했습니다: " + summarizeMessage(error)
             );
         }
     }
@@ -80,15 +86,44 @@ public class TrainingProductAiClient {
                 );
             }
             return response;
+        } catch (RestClientResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeResponse(error)
+            );
         } catch (RestClientException error) {
             throw new BusinessException(
                     ErrorCode.CATEGORY_MATCHING_FAILED,
-                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다."
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeMessage(error)
             );
         }
     }
 
     private RestClient restClient() {
         return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
+    }
+
+    private String summarizeResponse(RestClientResponseException error) {
+        String body = error.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return error.getStatusCode().toString();
+        }
+        return abbreviate(body);
+    }
+
+    private String summarizeMessage(Exception error) {
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            return error.getClass().getSimpleName();
+        }
+        return abbreviate(message);
+    }
+
+    private String abbreviate(String value) {
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 300) {
+            return normalized;
+        }
+        return normalized.substring(0, 300) + "...";
     }
 }
