@@ -1,228 +1,174 @@
-# StorePilot
+# StorePilot Backend
 
-### 스마트스토어 상품 키워드 자동 생성 및 분석 플랫폼
-
-상품명을 입력하면
-**네이버 카테고리를 자동 추론하고, 검색 키워드를 생성한 뒤 검색량·경쟁도를 기반으로 점수화하는 웹 서비스**
-
----
-
-## 프로젝트 소개
-
-StorePilot는 스마트스토어 판매자를 위한 **상품 키워드 생성 엔진**입니다.
-
-사용자는 상품명 목록(Excel/CSV)을 업로드하면 시스템이:
-
-1. 상품명 분석
-2. 네이버 카테고리 자동 매핑
-3. 관련 키워드 생성
-4. 검색량 및 경쟁도 수집
-5. 키워드 점수 계산
-6. 최종 추천 키워드 제공
-
-까지 자동 수행합니다.
-
----
-
-## 주요 기능
-
-### 1. 상품 업로드
-
-* Excel(.xlsx), CSV 지원
-* 최대 300개 상품 일괄 처리
-
-입력 예시
-
-| 상품명         |
-| ----------- |
-| 남성 반팔 티셔츠   |
-| 무선 블루투스 이어폰 |
-
----
-
-### 2. 카테고리 자동 매핑
-
-상품명을 임베딩하여 네이버 카테고리와 매칭합니다.
-
-예시
-
-```
-입력:
-무선 블루투스 이어폰
-
-↓
-
-예측 카테고리:
-디지털/가전 > 음향기기 > 블루투스이어폰
-```
-
----
-
-### 3. 키워드 생성
-
-카테고리와 상품명을 기반으로 후보 키워드를 생성합니다.
-
-예시
-
-```
-상품:
-남성 반팔 티셔츠
-
-생성:
-남자 반팔
-여름 반팔
-오버핏 티셔츠
-기본 반팔
-남성 티셔츠
-```
-
----
-
-### 4. 키워드 점수 계산
-
-최종 점수 산식
-
-```
-최종점수 =
-0.35 × 상품명 관련도
-+
-0.30 × 카테고리 관련도
-+
-0.20 × 검색량 점수
-+
-0.15 × 경쟁도 점수
-```
-
-설명
-
-| 항목       | 계산 방식        |
-| -------- | ------------ |
-| 상품명 관련도  | 임베딩 유사도      |
-| 카테고리 관련도 | 카테고리 임베딩 유사도 |
-| 검색량 점수   | 정규화된 검색량     |
-| 경쟁도 점수   | 경쟁 상품 수 기반   |
-
----
-
-## 시스템 구조
-
-```
-상품 입력
- ↓
-텍스트 전처리
- ↓
-문장 임베딩
- ↓
-FAISS 벡터 검색
- ↓
-Top-K 카테고리 추출
- ↓
-키워드 생성
- ↓
-검색량 수집
- ↓
-경쟁도 계산
- ↓
-점수 계산
- ↓
-결과 반환
-```
-
----
+StorePilot의 Spring Boot 백엔드 서버입니다. 인증, 엑셀 업로드, 네이버 카테고리 데이터, 내 카테고리 매핑, 키워드 결과 생성, AI 서버 연동을 담당합니다.
 
 ## 기술 스택
 
-### Frontend
+- Java 21
+- Spring Boot 4
+- Spring Security
+- Spring Data JPA
+- MySQL
+- Apache POI
+- Springdoc OpenAPI
 
-* React
-* TypeScript
-* Vite
+## 주요 기능
 
-### Backend
+- 이메일/비밀번호 회원가입 및 로그인
+- HttpOnly 쿠키 기반 Access Token / Refresh Token 인증
+- Refresh Token 해시 저장
+- 사용자 권한: `USER`, `ADMIN`
+- 상품 엑셀 업로드 및 비동기 처리
+- 처리 결과 엑셀 다운로드
+- 상품 이미지 ZIP 다운로드
+- 네이버 카테고리 리스트 업로드
+- 내 카테고리 매핑 업로드
+- 기존 상품 인덱스 재생성
+- 상품 카테고리 피드백 반영
+- 카테고리 예측 및 상품 인덱스 재생성을 위한 AI 서버 연동
 
-* Spring Boot
-* Java 21
+관리자 전용 API:
 
-### AI / Search
+- `POST /api/v1/admin/naver-categories/upload`
+- `POST /api/v1/admin/my-category-mappings/upload`
+- `POST /api/v1/admin/training-products/rebuild`
+- `POST /api/v1/admin/training-products/feedback`
 
-* multilingual-e5-small
-* FAISS
+## 필요 조건
 
-### Database
+- JDK 21
+- MySQL 8 또는 호환 가능한 MySQL 서버
+- `http://127.0.0.1:8000`에서 실행 중인 StorePilot AI 서버
 
-* MySQL
+## 환경변수
 
-### Infra
+`.env.example`을 `.env`로 복사한 뒤 로컬 값에 맞게 수정합니다.
 
-* Docker
+```env
+DB_URL=jdbc:mysql://localhost:3306/storepilot?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+DB_USERNAME=root
+DB_PASSWORD=change-me
 
----
+AI_SERVER_BASE_URL=http://127.0.0.1:8000
 
-## API 예시
-
-### 키워드 생성
-
-POST
-
+STOREPILOT_AUTH_ALLOWED_ORIGINS=http://localhost:3000
+STOREPILOT_AUTH_COOKIE_SAME_SITE=Lax
+STOREPILOT_AUTH_COOKIE_SECURE=false
+STOREPILOT_AUTH_REFRESH_TOKEN_DAYS=14
+STOREPILOT_AUTH_ACCESS_TOKEN_MINUTES=30
+STOREPILOT_AUTH_JWT_SECRET=change-this-to-a-long-random-secret
 ```
-/api/v1/keywords/generate
-```
 
-Request
+Spring Boot는 위 값을 프로세스 환경변수에서 읽습니다. IntelliJ에서 실행한다면 Run Configuration에 환경변수를 추가하거나 env-file 플러그인을 사용합니다. PowerShell에서 실행한다면 앱 실행 전에 `.env`를 현재 프로세스 환경변수로 로드합니다.
 
-```json
-{
-  "products": [
-    {
-      "productName": "남성 반팔 티셔츠"
-    }
-  ]
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#].*=.*$' } | ForEach-Object {
+  $key, $value = $_.Split('=', 2)
+  [Environment]::SetEnvironmentVariable($key.Trim(), $value.Trim(), 'Process')
 }
 ```
 
-Response
+## 로컬 실행
 
-```json
-{
-  "results": [
-    {
-      "productName": "남성 반팔 티셔츠",
-      "category": "패션의류 > 남성의류",
-      "keywords": [
-        {
-          "keyword": "남자 반팔",
-          "score": 92.1
-        }
-      ]
-    }
-  ]
-}
+```powershell
+cd C:\Project\StorePilot\be
+.\gradlew.bat bootRun
 ```
 
----
+백엔드 서버 주소:
 
-## 프로젝트 구조
-
-```
-storepilot
-├── frontend
-├── backend
-├── ai-engine
-├── batch
-├── docs
-├── docker
-└── README.md
+```text
+http://localhost:8080
 ```
 
----
+Swagger UI:
 
-## 향후 계획
+```text
+http://localhost:8080/swagger-ui.html
+```
 
-* [ ] 상품명 자동 생성
-* [ ] SEO 최적화 추천
-* [ ] 경쟁 상품 분석
-* [ ] 실시간 트렌드 반영
-* [ ] 스마트스토어 연동
-* [ ] 대량 처리 최적화
+## 테스트
 
----
+```powershell
+cd C:\Project\StorePilot\be
+.\gradlew.bat test
+```
+
+Windows에서 Java가 PATH에 잡히지 않는 경우:
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\gradlew.bat test
+```
+
+## 인증 흐름
+
+- `POST /api/v1/auth/signup`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/logout`
+
+서버는 아래 쿠키를 발급합니다.
+
+- `storepilot_access_token`
+- `storepilot_refresh_token`
+
+두 쿠키 모두 HttpOnly 쿠키입니다. 프론트엔드 요청은 반드시 `credentials: "include"`를 사용해야 합니다.
+
+로컬 HTTP 개발 환경:
+
+```env
+STOREPILOT_AUTH_COOKIE_SAME_SITE=Lax
+STOREPILOT_AUTH_COOKIE_SECURE=false
+```
+
+Vercel 프론트엔드와 EC2 백엔드처럼 서로 다른 HTTPS 도메인에서 배포하는 경우:
+
+```env
+STOREPILOT_AUTH_COOKIE_SAME_SITE=None
+STOREPILOT_AUTH_COOKIE_SECURE=true
+STOREPILOT_AUTH_ALLOWED_ORIGINS=https://your-frontend.vercel.app
+```
+
+## AI 서버 연동
+
+백엔드는 아래 환경변수를 통해 AI 서버를 호출합니다.
+
+```env
+AI_SERVER_BASE_URL=http://127.0.0.1:8000
+```
+
+백엔드가 사용하는 주요 AI 서버 API:
+
+- `POST /ai/categories/rebuild`
+- `POST /ai/categories/predict`
+- `POST /ai/categories/product-index/rebuild`
+- `POST /ai/categories/product-index/feedback`
+
+백엔드와 AI 서버를 같은 EC2에 배포한다면 AI 서버는 `127.0.0.1:8000`에만 바인딩하고, 외부에 `8000` 포트를 직접 열지 않는 것을 권장합니다.
+
+## 데이터베이스 주의사항
+
+현재 `application.yml`의 `spring.jpa.hibernate.ddl-auto`는 `update`입니다.
+
+로컬 개발에는 편하지만, 기존 컬럼을 제거하거나 운영 데이터를 안전하게 마이그레이션해주지는 않습니다. 소유권 필드나 인증 스키마가 크게 바뀐 경우 로컬에서는 DB를 새로 만드는 편이 더 안전할 수 있습니다. 운영 배포 전에는 별도의 마이그레이션 도구 도입을 권장합니다.
+
+특정 사용자를 관리자로 바꾸려면:
+
+```sql
+UPDATE storepilot_users
+SET role = 'ADMIN'
+WHERE email = 'admin@example.com';
+```
+
+## 업로드 파일
+
+업로드 및 생성 파일은 기본적으로 아래 경로에 저장됩니다.
+
+```text
+uploads/
+```
+
+이 디렉터리는 런타임 데이터이므로 Git에 커밋하지 않습니다.
