@@ -113,6 +113,8 @@ public class ProductExcelJobService {
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
             job.fail(message);
+        } finally {
+            deleteUploadedFile(job.getUploadedFilePath());
         }
     }
 
@@ -136,5 +138,23 @@ public class ProductExcelJobService {
 
     private Path uploadRoot() {
         return Path.of(uploadDir).toAbsolutePath().normalize();
+    }
+
+    private void deleteUploadedFile(Path uploadedFilePath) {
+        if (uploadedFilePath == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(uploadedFilePath);
+            Path jobDirectory = uploadedFilePath.getParent();
+            if (jobDirectory != null && Files.isDirectory(jobDirectory)) {
+                try (var children = Files.list(jobDirectory)) {
+                    if (children.findAny().isEmpty()) {
+                        Files.deleteIfExists(jobDirectory);
+                    }
+                }
+            }
+        } catch (IOException ignored) {
+        }
     }
 }
