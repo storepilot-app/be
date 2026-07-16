@@ -39,6 +39,7 @@ public class NaverCategoryUploadService {
     private static final String HEADER_LEVEL2 = "2차카테";
     private static final String HEADER_LEVEL3 = "3차카테";
     private static final String HEADER_LEVEL4 = "4차카테";
+    private static final int VERSION_DIRECTORY_RETENTION_COUNT = 5;
 
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
@@ -100,6 +101,7 @@ public class NaverCategoryUploadService {
             naverCategoryRepository.saveAll(categories);
             writeCsv(csvFilePath, categories);
             naverCategoryEmbeddingService.rebuildEmbeddings(version.getId(), categories);
+            cleanupOldVersionDirectories(versionDir.getParent());
             return version;
         } catch (IOException exception) {
             throw new BusinessException(
@@ -238,6 +240,37 @@ public class NaverCategoryUploadService {
 
     private Path uploadRoot() {
         return Path.of(uploadDir).toAbsolutePath().normalize();
+    }
+
+    private void cleanupOldVersionDirectories(Path versionsRoot) {
+        if (versionsRoot == null || !Files.isDirectory(versionsRoot)) {
+            return;
+        }
+        try (var paths = Files.list(versionsRoot)) {
+            paths
+                    .filter(Files::isDirectory)
+                    .sorted((left, right) -> right.getFileName().toString().compareTo(left.getFileName().toString()))
+                    .skip(VERSION_DIRECTORY_RETENTION_COUNT)
+                    .forEach(this::deleteDirectoryQuietly);
+        } catch (IOException exception) {
+            log.warn("이전 네이버 카테고리 업로드 파일 정리에 실패했습니다.", exception);
+        }
+    }
+
+    private void deleteDirectoryQuietly(Path directory) {
+        try (var paths = Files.walk(directory)) {
+            paths
+                    .sorted((left, right) -> right.compareTo(left))
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException exception) {
+                            log.warn("네이버 카테고리 업로드 파일을 삭제하지 못했습니다: {}", path, exception);
+                        }
+                    });
+        } catch (IOException exception) {
+            log.warn("네이버 카테고리 업로드 디렉터리를 탐색하지 못했습니다: {}", directory, exception);
+        }
     }
 
     private record NaverCategoryParseResult(
