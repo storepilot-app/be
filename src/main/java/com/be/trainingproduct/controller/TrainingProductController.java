@@ -54,6 +54,7 @@ public class TrainingProductController {
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody ProductCategoryFeedbackRequest request
     ) {
+        requireAdmin(loginUser);
         ProductCategoryFeedbackResponse response = trainingProductService.addFeedback(loginUser.id(), request);
         return CommonResponse.success(response, response.message());
     }

@@ -42,8 +42,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/naver-categories/upload").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/training-products/rebuild").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )
