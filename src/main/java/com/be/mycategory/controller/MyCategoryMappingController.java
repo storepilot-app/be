@@ -1,9 +1,6 @@
 package com.be.mycategory.controller;
 
-import com.be.auth.domain.UserRole;
 import com.be.auth.security.LoginUser;
-import com.be.global.exception.BusinessException;
-import com.be.global.exception.ErrorCode;
 import com.be.global.response.CommonResponse;
 import com.be.mycategory.domain.MyCategoryMappingVersion;
 import com.be.mycategory.dto.MyCategoryMappingUploadResponse;
@@ -41,15 +38,8 @@ public class MyCategoryMappingController {
             @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). A열은 마이카테고리, H열은 네이버 카테고리 코드입니다.", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        requireAdmin(loginUser);
         MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, loginUser.id());
         MyCategoryMappingUploadResponse response = MyCategoryMappingUploadResponse.from(version);
         return CommonResponse.success(response, response.message());
-    }
-
-    private void requireAdmin(LoginUser loginUser) {
-        if (loginUser == null || loginUser.role() != UserRole.ADMIN) {
-            throw new BusinessException(ErrorCode.AUTH_FORBIDDEN, "관리자만 사용할 수 있는 기능입니다.");
-        }
     }
 }
