@@ -1,5 +1,6 @@
 package com.be.auth.security;
 
+import com.be.auth.repository.StorePilotUserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AuthCookieManager authCookieManager;
     private final JwtTokenProvider jwtTokenProvider;
+    private final StorePilotUserRepository userRepository;
 
     @Override
     protected void doFilterInternal(
@@ -28,12 +30,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         authCookieManager.readAccessToken(request).ifPresent(token -> {
             try {
                 LoginUser loginUser = jwtTokenProvider.parseAccessToken(token);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        loginUser,
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + loginUser.role().name()))
-                );
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (userRepository.existsById(loginUser.id())) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            loginUser,
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_" + loginUser.role().name()))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             } catch (IllegalArgumentException ignored) {
                 SecurityContextHolder.clearContext();
             }

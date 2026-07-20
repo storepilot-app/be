@@ -17,6 +17,7 @@ import com.be.global.response.CommonResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,6 +79,17 @@ public class AuthController {
         authCookieManager.readRefreshToken(request).ifPresent(refreshTokenService::revoke);
         authCookieManager.clear(response);
         return CommonResponse.success(null, "로그아웃되었습니다.");
+    }
+
+    @DeleteMapping("/me")
+    public CommonResponse<MessageResponse> deleteAccount(
+            @AuthenticationPrincipal LoginUser loginUser,
+            HttpServletResponse response
+    ) {
+        authService.deleteAccount(loginUser.id());
+        authCookieManager.clear(response);
+        MessageResponse messageResponse = new MessageResponse("회원 탈퇴가 완료되었습니다.");
+        return CommonResponse.success(messageResponse, messageResponse.message());
     }
 
     private void writeCookies(HttpServletResponse response, LoginResult result) {

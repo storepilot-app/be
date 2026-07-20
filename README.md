@@ -115,6 +115,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 - `POST /api/v1/auth/refresh`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
+- `DELETE /api/v1/auth/me`
 
 서버는 아래 쿠키를 발급합니다.
 

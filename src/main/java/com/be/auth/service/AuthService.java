@@ -7,10 +7,15 @@ import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
+import com.be.auth.repository.EmailVerificationTokenRepository;
+import com.be.auth.repository.RefreshTokenRepository;
 import com.be.auth.repository.StorePilotUserRepository;
 import com.be.auth.security.JwtTokenProvider;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.mycategory.repository.MyCategoryMappingRepository;
+import com.be.mycategory.repository.MyCategoryMappingVersionRepository;
+import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -30,6 +35,11 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationProperties emailVerificationProperties;
     private final EmailVerificationService emailVerificationService;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final MyCategoryMappingRepository myCategoryMappingRepository;
+    private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
+    private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
 
     @Transactional
     public SignupResult signup(AuthRequest request) {
@@ -83,6 +93,18 @@ public class AuthService {
     public StorePilotUser getRequiredUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "로그인이 필요합니다."));
+    }
+
+    @Transactional
+    public void deleteAccount(Long userId) {
+        StorePilotUser user = getRequiredUser(userId);
+
+        refreshTokenRepository.deleteByUserId(user.getId());
+        emailVerificationTokenRepository.deleteByUserId(user.getId());
+        myCategoryMappingRepository.deleteByUserId(user.getId());
+        myCategoryMappingVersionRepository.deleteByUserId(user.getId());
+        productCategoryFeedbackRepository.deleteByUserId(user.getId());
+        userRepository.delete(user);
     }
 
     private LoginResult issueLoginResult(StorePilotUser user) {
