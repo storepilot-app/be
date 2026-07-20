@@ -10,7 +10,8 @@ public record AuthProperties(
         long refreshTokenDays,
         boolean cookieSecure,
         String cookieSameSite,
-        List<String> allowedOrigins
+        List<String> allowedOrigins,
+        String appBaseUrl
 ) {
     public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -27,6 +28,9 @@ public record AuthProperties(
         }
         if (allowedOrigins == null || allowedOrigins.isEmpty()) {
             allowedOrigins = List.of("http://localhost:3000", "http://127.0.0.1:3000");
+        }
+        if (appBaseUrl == null || appBaseUrl.isBlank()) {
+            appBaseUrl = "http://localhost:3000";
         }
     }
 }

@@ -27,6 +27,14 @@ storepilot:
     cookie-secure: ${STOREPILOT_AUTH_COOKIE_SECURE}
     cookie-same-site: ${STOREPILOT_AUTH_COOKIE_SAME_SITE}
     allowed-origins: ${STOREPILOT_AUTH_ALLOWED_ORIGINS}
+    app-base-url: ${STOREPILOT_APP_BASE_URL:http://localhost:3000}
+    email-verification:
+      enabled: ${STOREPILOT_EMAIL_VERIFICATION_ENABLED:false}
+      token-minutes: ${STOREPILOT_EMAIL_VERIFICATION_TOKEN_MINUTES:30}
+  mail:
+    resend:
+      api-key: ${STOREPILOT_RESEND_API_KEY}
+      from: ${STOREPILOT_MAIL_FROM:StorePilot <onboarding@resend.dev>}
   ai:
     base-url: ${AI_SERVER_BASE_URL}
   category:

@@ -15,6 +15,7 @@ StorePilot의 Spring Boot 백엔드 서버입니다. 인증, 엑셀 업로드, �
 ## 주요 기능
 
 - 이메일/비밀번호 회원가입 및 로그인
+- Resend 기반 회원가입 이메일 인증
 - HttpOnly 쿠키 기반 Access Token / Refresh Token 인증
 - Refresh Token 해시 저장
 - 사용자 권한: `USER`, `ADMIN`
@@ -30,7 +31,6 @@ StorePilot의 Spring Boot 백엔드 서버입니다. 인증, 엑셀 업로드, �
 관리자 전용 API:
 
 - `POST /api/v1/admin/naver-categories/upload`
-- `POST /api/v1/admin/my-category-mappings/upload`
 - `POST /api/v1/admin/training-products/rebuild`
 - `POST /api/v1/admin/training-products/feedback`
 
@@ -57,6 +57,11 @@ STOREPILOT_AUTH_COOKIE_SECURE=false
 STOREPILOT_AUTH_REFRESH_TOKEN_DAYS=14
 STOREPILOT_AUTH_ACCESS_TOKEN_MINUTES=30
 STOREPILOT_AUTH_JWT_SECRET=change-this-to-a-long-random-secret
+STOREPILOT_APP_BASE_URL=http://localhost:3000
+STOREPILOT_EMAIL_VERIFICATION_ENABLED=false
+STOREPILOT_EMAIL_VERIFICATION_TOKEN_MINUTES=30
+STOREPILOT_RESEND_API_KEY=
+STOREPILOT_MAIL_FROM=StorePilot <onboarding@resend.dev>
 ```
 
 Spring Boot는 위 값을 프로세스 환경변수에서 읽습니다. IntelliJ에서 실행한다면 Run Configuration에 환경변수를 추가하거나 env-file 플러그인을 사용합니다. PowerShell에서 실행한다면 앱 실행 전에 `.env`를 현재 프로세스 환경변수로 로드합니다.
@@ -106,9 +111,11 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 - `POST /api/v1/auth/signup`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/verify-email`
 - `POST /api/v1/auth/refresh`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
+- `DELETE /api/v1/auth/me`
 
 서버는 아래 쿠키를 발급합니다.
 
@@ -116,6 +123,18 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 - `storepilot_refresh_token`
 
 두 쿠키 모두 HttpOnly 쿠키입니다. 프론트엔드 요청은 반드시 `credentials: "include"`를 사용해야 합니다.
+
+이메일 인증을 사용할 때는 아래 값을 운영 환경에 설정합니다.
+
+```env
+STOREPILOT_APP_BASE_URL=https://your-frontend-domain
+STOREPILOT_EMAIL_VERIFICATION_ENABLED=true
+STOREPILOT_EMAIL_VERIFICATION_TOKEN_MINUTES=30
+STOREPILOT_RESEND_API_KEY=re_xxxxxxxxx
+STOREPILOT_MAIL_FROM=StorePilot <no-reply@your-domain>
+```
+
+Resend에서 운영 발송을 하려면 발신 도메인을 인증한 뒤 해당 도메인의 주소를 `STOREPILOT_MAIL_FROM`에 사용합니다. 로컬 개발에서는 `STOREPILOT_EMAIL_VERIFICATION_ENABLED=false`로 두면 회원가입 직후 기존처럼 로그인됩니다.
 
 로컬 HTTP 개발 환경:
 
