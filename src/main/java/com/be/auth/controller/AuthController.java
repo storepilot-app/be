@@ -3,10 +3,13 @@ package com.be.auth.controller;
 import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
+import com.be.auth.dto.EmailVerificationRequest;
 import com.be.auth.dto.LoginResult;
+import com.be.auth.dto.MessageResponse;
 import com.be.auth.security.AuthCookieManager;
 import com.be.auth.security.LoginUser;
 import com.be.auth.service.AuthService;
+import com.be.auth.service.EmailVerificationService;
 import com.be.auth.service.RefreshTokenService;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
@@ -26,12 +29,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
     private final AuthCookieManager authCookieManager;
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/signup")
-    public CommonResponse<AuthResponse> signup(@RequestBody AuthRequest request, HttpServletResponse response) {
-        LoginResult result = authService.signup(request);
+    public CommonResponse<?> signup(@RequestBody AuthRequest request, HttpServletResponse response) {
+        AuthService.SignupResult signupResult = authService.signup(request);
+        if (signupResult.requiresVerification()) {
+            return CommonResponse.success(signupResult.messageResponse(), signupResult.messageResponse().message());
+        }
+
+        LoginResult result = signupResult.loginResult();
         writeCookies(response, result);
         return CommonResponse.success(result.response(), "회원가입이 완료되었습니다.");
     }
@@ -50,6 +59,13 @@ public class AuthController {
         LoginResult result = authService.refresh(refreshToken);
         writeCookies(response, result);
         return CommonResponse.success(result.response(), "토큰이 갱신되었습니다.");
+    }
+
+    @PostMapping("/verify-email")
+    public CommonResponse<MessageResponse> verifyEmail(@RequestBody EmailVerificationRequest request) {
+        emailVerificationService.verify(request.token());
+        MessageResponse response = new MessageResponse("이메일 인증이 완료되었습니다. 이제 로그인할 수 있습니다.");
+        return CommonResponse.success(response, response.message());
     }
 
     @GetMapping("/me")

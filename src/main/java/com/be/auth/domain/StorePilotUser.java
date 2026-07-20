@@ -41,14 +41,45 @@ public class StorePilotUser {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    private StorePilotUser(String email, String passwordHash, UserRole role, Instant createdAt) {
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    private StorePilotUser(
+            String email,
+            String passwordHash,
+            UserRole role,
+            Instant createdAt,
+            boolean emailVerified,
+            Instant emailVerifiedAt
+    ) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
         this.createdAt = createdAt;
+        this.emailVerified = emailVerified;
+        this.emailVerifiedAt = emailVerifiedAt;
     }
 
-    public static StorePilotUser create(String email, String passwordHash) {
-        return new StorePilotUser(email, passwordHash, UserRole.USER, Instant.now());
+    public static StorePilotUser create(String email, String passwordHash, boolean emailVerified) {
+        Instant now = Instant.now();
+        return new StorePilotUser(
+                email,
+                passwordHash,
+                UserRole.USER,
+                now,
+                emailVerified,
+                emailVerified ? now : null
+        );
+    }
+
+    public void verifyEmail() {
+        if (emailVerified) {
+            return;
+        }
+        this.emailVerified = true;
+        this.emailVerifiedAt = Instant.now();
     }
 }

@@ -1,10 +1,12 @@
 package com.be.auth.service;
 
+import com.be.auth.config.EmailVerificationProperties;
 import com.be.auth.domain.StorePilotUser;
 import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
 import com.be.auth.dto.LoginResult;
+import com.be.auth.dto.MessageResponse;
 import com.be.auth.repository.StorePilotUserRepository;
 import com.be.auth.security.JwtTokenProvider;
 import com.be.global.exception.BusinessException;
@@ -26,9 +28,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final EmailVerificationProperties emailVerificationProperties;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional
-    public LoginResult signup(AuthRequest request) {
+    public SignupResult signup(AuthRequest request) {
         String email = normalizeEmail(request.email());
         String password = requirePassword(request.password());
         requirePasswordConfirm(password, request.passwordConfirm());
@@ -37,8 +41,13 @@ public class AuthService {
             throw authInvalid("이미 가입된 이메일입니다.");
         }
 
-        StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password)));
-        return issueLoginResult(user);
+        boolean verifiedOnCreate = !emailVerificationProperties.enabled();
+        StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password), verifiedOnCreate));
+        if (emailVerificationProperties.enabled()) {
+            emailVerificationService.sendVerificationEmail(user);
+            return SignupResult.verificationRequired("인증 메일을 보냈습니다. 메일함에서 인증을 완료해주세요.");
+        }
+        return SignupResult.loggedIn(issueLoginResult(user));
     }
 
     @Transactional
@@ -50,6 +59,7 @@ public class AuthService {
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw authInvalid("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
+        requireEmailVerified(user);
         return issueLoginResult(user);
     }
 
@@ -65,6 +75,7 @@ public class AuthService {
         refreshTokenService.revoke(refreshToken);
         StorePilotUser user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "다시 로그인해주세요."));
+        requireEmailVerified(user);
         return issueLoginResult(user);
     }
 
@@ -83,6 +94,12 @@ public class AuthService {
                 refreshToken.ttl(),
                 new AuthResponse(toUserResponse(user))
         );
+    }
+
+    private void requireEmailVerified(StorePilotUser user) {
+        if (emailVerificationProperties.enabled() && !user.isEmailVerified()) {
+            throw authInvalid("이메일 인증 후 로그인할 수 있습니다.");
+        }
     }
 
     private String normalizeEmail(String value) {
@@ -109,5 +126,22 @@ public class AuthService {
 
     private BusinessException authInvalid(String message) {
         return new BusinessException(ErrorCode.AUTH_INVALID, message);
+    }
+
+    public record SignupResult(
+            LoginResult loginResult,
+            MessageResponse messageResponse
+    ) {
+        public static SignupResult loggedIn(LoginResult loginResult) {
+            return new SignupResult(loginResult, null);
+        }
+
+        public static SignupResult verificationRequired(String message) {
+            return new SignupResult(null, new MessageResponse(message));
+        }
+
+        public boolean requiresVerification() {
+            return messageResponse != null;
+        }
     }
 }
