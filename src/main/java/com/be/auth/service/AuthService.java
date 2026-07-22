@@ -47,11 +47,19 @@ public class AuthService {
         String password = requirePassword(request.password());
         requirePasswordConfirm(password, request.passwordConfirm());
 
-        if (userRepository.existsByEmail(email)) {
-            throw authInvalid("이미 가입된 이메일입니다.");
+        boolean verifiedOnCreate = !emailVerificationProperties.enabled();
+        StorePilotUser existingUser = userRepository.findByEmail(email).orElse(null);
+        if (existingUser != null) {
+            if (existingUser.isEmailVerified() || !emailVerificationProperties.enabled()) {
+                throw authInvalid("이미 가입된 이메일입니다.");
+            }
+
+            existingUser.updatePasswordHash(passwordEncoder.encode(password));
+            emailVerificationTokenRepository.deleteByUserId(existingUser.getId());
+            emailVerificationService.sendVerificationEmail(existingUser);
+            return SignupResult.verificationRequired("인증 메일을 다시 보냈습니다. 메일함에서 인증을 완료해주세요.");
         }
 
-        boolean verifiedOnCreate = !emailVerificationProperties.enabled();
         StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password), verifiedOnCreate));
         if (emailVerificationProperties.enabled()) {
             emailVerificationService.sendVerificationEmail(user);
