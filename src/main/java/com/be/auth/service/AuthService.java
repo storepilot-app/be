@@ -5,6 +5,7 @@ import com.be.auth.domain.StorePilotUser;
 import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
+import com.be.auth.dto.EmailVerificationResendRequest;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
 import com.be.auth.repository.EmailVerificationTokenRepository;
@@ -50,14 +51,10 @@ public class AuthService {
         boolean verifiedOnCreate = !emailVerificationProperties.enabled();
         StorePilotUser existingUser = userRepository.findByEmail(email).orElse(null);
         if (existingUser != null) {
-            if (existingUser.isEmailVerified() || !emailVerificationProperties.enabled()) {
-                throw authInvalid("이미 가입된 이메일입니다.");
-            }
-
-            existingUser.updatePasswordHash(passwordEncoder.encode(password));
-            emailVerificationTokenRepository.deleteByUserId(existingUser.getId());
-            emailVerificationService.sendVerificationEmail(existingUser);
-            return SignupResult.verificationRequired("인증 메일을 다시 보냈습니다. 메일함에서 인증을 완료해주세요.");
+            String message = existingUser.isEmailVerified() || !emailVerificationProperties.enabled()
+                    ? "이미 가입된 이메일입니다."
+                    : "이미 가입 대기 중인 이메일입니다. 인증메일 재전송을 이용해주세요.";
+            throw authInvalid(message);
         }
 
         StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password), verifiedOnCreate));
@@ -66,6 +63,24 @@ public class AuthService {
             return SignupResult.verificationRequired("인증 메일을 보냈습니다. 메일함에서 인증을 완료해주세요.");
         }
         return SignupResult.loggedIn(issueLoginResult(user));
+    }
+
+    @Transactional
+    public MessageResponse resendVerificationEmail(EmailVerificationResendRequest request) {
+        if (!emailVerificationProperties.enabled()) {
+            throw authInvalid("이메일 인증을 사용하지 않는 환경입니다.");
+        }
+
+        String email = normalizeEmail(request.email());
+        StorePilotUser user = userRepository.findByEmail(email)
+                .orElseThrow(() -> authInvalid("가입 대기 중인 이메일을 찾을 수 없습니다."));
+        if (user.isEmailVerified()) {
+            throw authInvalid("이미 인증된 이메일입니다.");
+        }
+
+        emailVerificationTokenRepository.deleteByUserId(user.getId());
+        emailVerificationService.sendVerificationEmail(user);
+        return new MessageResponse("인증 메일을 다시 보냈습니다. 메일함에서 인증을 완료해주세요.");
     }
 
     @Transactional

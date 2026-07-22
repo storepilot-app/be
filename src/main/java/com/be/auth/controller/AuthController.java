@@ -4,6 +4,7 @@ import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
 import com.be.auth.dto.EmailVerificationRequest;
+import com.be.auth.dto.EmailVerificationResendRequest;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
 import com.be.auth.security.AuthCookieManager;
@@ -66,6 +67,12 @@ public class AuthController {
     public CommonResponse<MessageResponse> verifyEmail(@RequestBody EmailVerificationRequest request) {
         emailVerificationService.verify(request.token());
         MessageResponse response = new MessageResponse("이메일 인증이 완료되었습니다. 이제 로그인할 수 있습니다.");
+        return CommonResponse.success(response, response.message());
+    }
+
+    @PostMapping("/verification-email/resend")
+    public CommonResponse<MessageResponse> resendVerificationEmail(@RequestBody EmailVerificationResendRequest request) {
+        MessageResponse response = authService.resendVerificationEmail(request);
         return CommonResponse.success(response, response.message());
     }
 
