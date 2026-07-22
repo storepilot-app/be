@@ -5,9 +5,11 @@ import com.be.auth.domain.StorePilotUser;
 import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
+import com.be.auth.dto.EmailVerificationResendRequest;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
 import com.be.auth.repository.EmailVerificationTokenRepository;
+import com.be.auth.repository.PasswordResetTokenRepository;
 import com.be.auth.repository.RefreshTokenRepository;
 import com.be.auth.repository.StorePilotUserRepository;
 import com.be.auth.security.JwtTokenProvider;
@@ -37,6 +39,7 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
@@ -47,17 +50,39 @@ public class AuthService {
         String password = requirePassword(request.password());
         requirePasswordConfirm(password, request.passwordConfirm());
 
-        if (userRepository.existsByEmail(email)) {
-            throw authInvalid("이미 가입된 이메일입니다.");
+        boolean verifiedOnCreate = !emailVerificationProperties.enabled();
+        StorePilotUser existingUser = userRepository.findByEmail(email).orElse(null);
+        if (existingUser != null) {
+            String message = existingUser.isEmailVerified() || !emailVerificationProperties.enabled()
+                    ? "이미 가입된 이메일입니다."
+                    : "이미 가입 대기 중인 이메일입니다. 인증메일 재전송을 이용해주세요.";
+            throw authInvalid(message);
         }
 
-        boolean verifiedOnCreate = !emailVerificationProperties.enabled();
         StorePilotUser user = userRepository.save(StorePilotUser.create(email, passwordEncoder.encode(password), verifiedOnCreate));
         if (emailVerificationProperties.enabled()) {
             emailVerificationService.sendVerificationEmail(user);
             return SignupResult.verificationRequired("인증 메일을 보냈습니다. 메일함에서 인증을 완료해주세요.");
         }
         return SignupResult.loggedIn(issueLoginResult(user));
+    }
+
+    @Transactional
+    public MessageResponse resendVerificationEmail(EmailVerificationResendRequest request) {
+        if (!emailVerificationProperties.enabled()) {
+            throw authInvalid("이메일 인증을 사용하지 않는 환경입니다.");
+        }
+
+        String email = normalizeEmail(request.email());
+        StorePilotUser user = userRepository.findByEmail(email)
+                .orElseThrow(() -> authInvalid("가입 대기 중인 이메일을 찾을 수 없습니다."));
+        if (user.isEmailVerified()) {
+            throw authInvalid("이미 인증된 이메일입니다.");
+        }
+
+        emailVerificationTokenRepository.deleteByUserId(user.getId());
+        emailVerificationService.sendVerificationEmail(user);
+        return new MessageResponse("인증 메일을 다시 보냈습니다. 메일함에서 인증을 완료해주세요.");
     }
 
     @Transactional
@@ -101,6 +126,7 @@ public class AuthService {
 
         refreshTokenRepository.deleteByUserId(user.getId());
         emailVerificationTokenRepository.deleteByUserId(user.getId());
+        passwordResetTokenRepository.deleteByUserId(user.getId());
         myCategoryMappingRepository.deleteByUserId(user.getId());
         myCategoryMappingVersionRepository.deleteByUserId(user.getId());
         productCategoryFeedbackRepository.deleteByUserId(user.getId());

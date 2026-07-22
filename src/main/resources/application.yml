@@ -31,6 +31,8 @@ storepilot:
     email-verification:
       enabled: ${STOREPILOT_EMAIL_VERIFICATION_ENABLED:false}
       token-minutes: ${STOREPILOT_EMAIL_VERIFICATION_TOKEN_MINUTES:30}
+    password-reset:
+      token-minutes: ${STOREPILOT_PASSWORD_RESET_TOKEN_MINUTES:30}
   mail:
     resend:
       api-key: ${STOREPILOT_RESEND_API_KEY}

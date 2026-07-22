@@ -4,12 +4,16 @@ import com.be.auth.dto.AuthRequest;
 import com.be.auth.dto.AuthResponse;
 import com.be.auth.dto.AuthUserResponse;
 import com.be.auth.dto.EmailVerificationRequest;
+import com.be.auth.dto.EmailVerificationResendRequest;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
+import com.be.auth.dto.PasswordResetConfirmRequest;
+import com.be.auth.dto.PasswordResetRequest;
 import com.be.auth.security.AuthCookieManager;
 import com.be.auth.security.LoginUser;
 import com.be.auth.service.AuthService;
 import com.be.auth.service.EmailVerificationService;
+import com.be.auth.service.PasswordResetService;
 import com.be.auth.service.RefreshTokenService;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
@@ -31,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
     private final AuthCookieManager authCookieManager;
     private final RefreshTokenService refreshTokenService;
 
@@ -66,6 +71,24 @@ public class AuthController {
     public CommonResponse<MessageResponse> verifyEmail(@RequestBody EmailVerificationRequest request) {
         emailVerificationService.verify(request.token());
         MessageResponse response = new MessageResponse("이메일 인증이 완료되었습니다. 이제 로그인할 수 있습니다.");
+        return CommonResponse.success(response, response.message());
+    }
+
+    @PostMapping("/verification-email/resend")
+    public CommonResponse<MessageResponse> resendVerificationEmail(@RequestBody EmailVerificationResendRequest request) {
+        MessageResponse response = authService.resendVerificationEmail(request);
+        return CommonResponse.success(response, response.message());
+    }
+
+    @PostMapping("/password-reset/request")
+    public CommonResponse<MessageResponse> requestPasswordReset(@RequestBody PasswordResetRequest request) {
+        MessageResponse response = passwordResetService.requestReset(request);
+        return CommonResponse.success(response, response.message());
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public CommonResponse<MessageResponse> resetPassword(@RequestBody PasswordResetConfirmRequest request) {
+        MessageResponse response = passwordResetService.resetPassword(request);
         return CommonResponse.success(response, response.message());
     }
 

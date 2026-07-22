@@ -341,7 +341,7 @@ public class ProductExcelProcessingService {
                     continue;
                 }
 
-                String imageUrl = readCell(row, imageUrlColumnIndex, formatter);
+                String imageUrl = normalizeImageUrl(readCell(row, imageUrlColumnIndex, formatter));
                 if (!isHttpUrl(imageUrl)) {
                     failedCount++;
                     continue;
@@ -796,15 +796,26 @@ public class ProductExcelProcessingService {
     }
 
     private String imageExtension(String imageUrl) {
-        String path = URI.create(imageUrl).getPath();
-        int dotIndex = path.lastIndexOf('.');
-        if (dotIndex >= 0) {
-            String extension = path.substring(dotIndex).toLowerCase(Locale.ROOT);
-            if (extension.matches("\\.(jpg|jpeg|png|webp|gif)")) {
-                return extension;
+        try {
+            String path = URI.create(imageUrl).getPath();
+            int dotIndex = path.lastIndexOf('.');
+            if (dotIndex >= 0) {
+                String extension = path.substring(dotIndex).toLowerCase(Locale.ROOT);
+                if (extension.matches("\\.(jpg|jpeg|png|webp|gif)")) {
+                    return extension;
+                }
             }
+        } catch (IllegalArgumentException ignored) {
+            return ".jpg";
         }
         return ".jpg";
+    }
+
+    private String normalizeImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            return "";
+        }
+        return imageUrl.trim().replace(" ", "%20");
     }
 
     private boolean isHttpUrl(String value) {
