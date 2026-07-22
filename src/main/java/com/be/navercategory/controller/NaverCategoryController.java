@@ -35,11 +35,13 @@ public class NaverCategoryController {
     public CommonResponse<NaverCategoryUploadResponse> upload(
             @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "네이버 카테고리 엑셀 파일(.xlsx, .xls)", required = true)
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @Parameter(description = "카테고리 임베딩 재생성을 건너뛰고 DB/CSV만 갱신합니다.")
+            @RequestParam(name = "skipEmbeddingRebuild", defaultValue = "false") boolean skipEmbeddingRebuild
     ) {
         requireAdmin(loginUser);
-        NaverCategoryVersion version = naverCategoryUploadService.upload(file);
-        NaverCategoryUploadResponse response = NaverCategoryUploadResponse.from(version);
+        NaverCategoryVersion version = naverCategoryUploadService.upload(file, skipEmbeddingRebuild);
+        NaverCategoryUploadResponse response = NaverCategoryUploadResponse.from(version, skipEmbeddingRebuild);
         return CommonResponse.success(response, response.message());
     }
 

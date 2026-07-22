@@ -4,11 +4,14 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
+import com.be.navercategory.repository.NaverCategoryRepository;
+import com.be.navercategory.repository.NaverCategoryVersionRepository;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +27,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -37,13 +41,15 @@ public class NaverCategoryUploadService {
     private static final String HEADER_LEVEL4 = "4차카테";
     private static final int VERSION_DIRECTORY_RETENTION_COUNT = 5;
 
-    private final NaverCategoryUploadTransactionService naverCategoryUploadTransactionService;
+    private final NaverCategoryRepository naverCategoryRepository;
+    private final NaverCategoryVersionRepository naverCategoryVersionRepository;
     private final NaverCategoryEmbeddingService naverCategoryEmbeddingService;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public NaverCategoryVersion upload(MultipartFile file) {
+    @Transactional
+    public NaverCategoryVersion upload(MultipartFile file, boolean skipEmbeddingRebuild) {
         validateFile(file);
         String filename = safeFilename(file.getOriginalFilename());
         String versionTimestamp = String.valueOf(System.currentTimeMillis());
@@ -79,16 +85,26 @@ public class NaverCategoryUploadService {
                     parseResult.duplicateRowCount()
             );
 
-            NaverCategoryVersion version = naverCategoryUploadTransactionService.saveNewActiveVersion(
+            naverCategoryVersionRepository.deactivateActiveVersions();
+            NaverCategoryVersion version = naverCategoryVersionRepository.save(NaverCategoryVersion.createActive(
                     filename,
                     parseResult.sourceRowCount(),
                     categories.size(),
                     uploadedFilePath.toString(),
                     csvFilePath.toString(),
-                    categories
-            );
+                    Instant.now()
+            ));
+
+            for (NaverCategory category : categories) {
+                category.assignVersionId(version.getId());
+            }
+            naverCategoryRepository.saveAll(categories);
             writeCsv(csvFilePath, categories);
-            naverCategoryEmbeddingService.rebuildEmbeddings(version.getId(), categories);
+            if (skipEmbeddingRebuild) {
+                log.info("네이버 카테고리 임베딩 재생성을 건너뜁니다: versionId={}", version.getId());
+            } else {
+                naverCategoryEmbeddingService.rebuildEmbeddings(version.getId(), categories);
+            }
             cleanupOldVersionDirectories(versionDir.getParent());
             return version;
         } catch (IOException exception) {

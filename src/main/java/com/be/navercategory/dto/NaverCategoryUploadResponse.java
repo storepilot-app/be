@@ -19,13 +19,19 @@ public record NaverCategoryUploadResponse(
         String message
 ) {
     public static NaverCategoryUploadResponse from(NaverCategoryVersion version) {
+        return from(version, false);
+    }
+
+    public static NaverCategoryUploadResponse from(NaverCategoryVersion version, boolean skipEmbeddingRebuild) {
         return new NaverCategoryUploadResponse(
                 version.getId(),
                 version.getSourceFilename(),
                 version.getRowCount(),
                 version.getCategoryCount(),
                 version.getCsvFilePath(),
-                "네이버 카테고리가 업로드되었습니다."
+                skipEmbeddingRebuild
+                        ? "네이버 카테고리가 DB에 저장되었습니다. 임베딩 재생성은 건너뛰었습니다."
+                        : "네이버 카테고리가 업로드되었습니다."
         );
     }
 }
