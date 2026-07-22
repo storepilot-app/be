@@ -349,7 +349,7 @@ public class ProductExcelProcessingService {
 
                 String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
                 String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
-                String filenameBase = !productCode.isBlank() ? productCode : (!productNumber.isBlank() ? productNumber : "row_" + (rowIndex + 1));
+                String filenameBase = !productNumber.isBlank() ? productNumber : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
                 String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
 
                 try {
