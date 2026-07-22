@@ -4,14 +4,11 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
-import com.be.navercategory.repository.NaverCategoryRepository;
-import com.be.navercategory.repository.NaverCategoryVersionRepository;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,7 +24,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -41,14 +37,12 @@ public class NaverCategoryUploadService {
     private static final String HEADER_LEVEL4 = "4차카테";
     private static final int VERSION_DIRECTORY_RETENTION_COUNT = 5;
 
-    private final NaverCategoryRepository naverCategoryRepository;
-    private final NaverCategoryVersionRepository naverCategoryVersionRepository;
+    private final NaverCategoryUploadTransactionService naverCategoryUploadTransactionService;
     private final NaverCategoryEmbeddingService naverCategoryEmbeddingService;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    @Transactional
     public NaverCategoryVersion upload(MultipartFile file) {
         validateFile(file);
         String filename = safeFilename(file.getOriginalFilename());
@@ -85,20 +79,14 @@ public class NaverCategoryUploadService {
                     parseResult.duplicateRowCount()
             );
 
-            naverCategoryVersionRepository.deactivateActiveVersions();
-            NaverCategoryVersion version = naverCategoryVersionRepository.save(NaverCategoryVersion.createActive(
+            NaverCategoryVersion version = naverCategoryUploadTransactionService.saveNewActiveVersion(
                     filename,
                     parseResult.sourceRowCount(),
                     categories.size(),
                     uploadedFilePath.toString(),
                     csvFilePath.toString(),
-                    Instant.now()
-            ));
-
-            for (NaverCategory category : categories) {
-                category.assignVersionId(version.getId());
-            }
-            naverCategoryRepository.saveAll(categories);
+                    categories
+            );
             writeCsv(csvFilePath, categories);
             naverCategoryEmbeddingService.rebuildEmbeddings(version.getId(), categories);
             cleanupOldVersionDirectories(versionDir.getParent());
