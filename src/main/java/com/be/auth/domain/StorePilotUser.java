@@ -83,4 +83,7 @@ public class StorePilotUser {
         this.emailVerifiedAt = Instant.now();
     }
 
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

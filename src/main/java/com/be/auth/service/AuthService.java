@@ -9,6 +9,7 @@ import com.be.auth.dto.EmailVerificationResendRequest;
 import com.be.auth.dto.LoginResult;
 import com.be.auth.dto.MessageResponse;
 import com.be.auth.repository.EmailVerificationTokenRepository;
+import com.be.auth.repository.PasswordResetTokenRepository;
 import com.be.auth.repository.RefreshTokenRepository;
 import com.be.auth.repository.StorePilotUserRepository;
 import com.be.auth.security.JwtTokenProvider;
@@ -38,6 +39,7 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
@@ -124,6 +126,7 @@ public class AuthService {
 
         refreshTokenRepository.deleteByUserId(user.getId());
         emailVerificationTokenRepository.deleteByUserId(user.getId());
+        passwordResetTokenRepository.deleteByUserId(user.getId());
         myCategoryMappingRepository.deleteByUserId(user.getId());
         myCategoryMappingVersionRepository.deleteByUserId(user.getId());
         productCategoryFeedbackRepository.deleteByUserId(user.getId());
