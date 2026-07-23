@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductExcelJobService {
     private static final String PRODUCT_NAME_COLUMN = "상품명";
     private static final int KEYWORD_COUNT = 30;
@@ -57,7 +59,7 @@ public class ProductExcelJobService {
                 filename,
                 targetPath
         ));
-        productExcelJobExecutor.execute(() -> process(job));
+        productExcelJobExecutor.execute(() -> process(job)); //process(job)을 지금 요청 스레드에서 바로 실행하지 말고 productExcelJobExecutor가 관리하는 백그라운드 스레드에서 실행
         return ProductExcelJobCreateResponse.from(job);
     }
 
@@ -154,7 +156,8 @@ public class ProductExcelJobService {
                     }
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException error) {
+            log.warn("업로드 임시 파일 삭제 실패: {}", uploadedFilePath, error);
         }
     }
 }
