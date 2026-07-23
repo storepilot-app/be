@@ -86,22 +86,7 @@ public class ProductExcelJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserId(),
-                    new ProductExcelJobProgressListener() {
-                        @Override
-                        public void onProgress(int processedCount, int totalCount, String stage) {
-                            job.updateProgress(processedCount, totalCount, stage);
-                        }
-
-                        @Override
-                        public void onCategoryCompleted(long elapsedMillis) {
-                            job.recordCategoryElapsed(elapsedMillis);
-                        }
-
-                        @Override
-                        public void onKeywordCompleted(long elapsedMillis) {
-                            job.recordKeywordElapsed(elapsedMillis);
-                        }
-                    }
+                    progressListener(job)
             );
             job.complete(result.filename(), result.content());
         } catch (Exception error) {
@@ -112,6 +97,25 @@ public class ProductExcelJobService {
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
+    }
+
+    private ProductExcelJobProgressListener progressListener(ProductExcelJob job) {
+        return new ProductExcelJobProgressListener() {
+            @Override
+            public void onProgress(int processedCount, int totalCount, String stage) {
+                job.updateProgress(processedCount, totalCount, stage);
+            }
+
+            @Override
+            public void onCategoryCompleted(long elapsedMillis) {
+                job.recordCategoryElapsed(elapsedMillis);
+            }
+
+            @Override
+            public void onKeywordCompleted(long elapsedMillis) {
+                job.recordKeywordElapsed(elapsedMillis);
+            }
+        };
     }
 
     private ProductExcelJob findJob(long jobId, Long userId) {
