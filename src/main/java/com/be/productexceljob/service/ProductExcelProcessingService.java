@@ -9,7 +9,9 @@ import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.productexceljob.dto.ExcelDownloadResult;
-import com.be.productexceljob.dto.ImageZipDownloadResult;
+import com.be.productexceljob.dto.ProductImageDownloadFailure;
+import com.be.productexceljob.dto.ProductImageDownloadItem;
+import com.be.productexceljob.dto.ProductImageDownloadPrepareResponse;
 import com.be.productexceljob.excel.KeywordDetailSheetWriter;
 import com.be.keyword.CategoryTokenExtractor;
 import com.be.keyword.KeywordCandidateRanker;
@@ -40,8 +42,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -314,12 +314,10 @@ public class ProductExcelProcessingService {
         return categories;
     }
 
-    public ImageZipDownloadResult downloadImagesAsZip(MultipartFile file) {
+    public ProductImageDownloadPrepareResponse prepareImageDownloads(MultipartFile file) {
         validateExcelFile(file);
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream());
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-             ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, StandardCharsets.UTF_8)) {
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
@@ -330,10 +328,9 @@ public class ProductExcelProcessingService {
             int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
             int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
 
-            int savedCount = 0;
-            int failedCount = 0;
             Set<String> entryNames = new LinkedHashSet<>();
-            List<ImageDownloadFailure> failures = new ArrayList<>();
+            List<ProductImageDownloadItem> images = new ArrayList<>();
+            List<ProductImageDownloadFailure> failures = new ArrayList<>();
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
 
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
@@ -347,8 +344,7 @@ public class ProductExcelProcessingService {
                 String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
                 String filenameBase = !productNumber.isBlank() ? productNumber : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
                 if (!isHttpUrl(imageUrl)) {
-                    failedCount++;
-                    failures.add(new ImageDownloadFailure(
+                    failures.add(new ProductImageDownloadFailure(
                             rowIndex + 1,
                             filenameBase,
                             imageUrl,
@@ -358,67 +354,30 @@ public class ProductExcelProcessingService {
                 }
 
                 String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
-
-                try {
-                    byte[] imageBytes = fetchImage(imageUrl);
-                    ZipEntry entry = new ZipEntry(entryName);
-                    zipOutputStream.putNextEntry(entry);
-                    zipOutputStream.write(imageBytes);
-                    zipOutputStream.closeEntry();
-                    savedCount++;
-                } catch (Exception e) {
-                    failedCount++;
-                    failures.add(new ImageDownloadFailure(rowIndex + 1, filenameBase, imageUrl, e.getMessage()));
-                }
+                images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
             }
 
-            writeImageDownloadFailures(zipOutputStream, failures);
-            zipOutputStream.finish();
-            return new ImageZipDownloadResult(
-                    buildImageZipFilename(file.getOriginalFilename()),
-                    outputStream.toByteArray(),
-                    savedCount,
-                    failedCount
-            );
+            return new ProductImageDownloadPrepareResponse(images.size(), failures.size(), images, failures);
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process image zip download.");
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read image download targets.");
         }
     }
 
-    private void writeImageDownloadFailures(
-            ZipOutputStream zipOutputStream,
-            List<ImageDownloadFailure> failures
-    ) throws IOException {
-        if (failures.isEmpty()) {
-            return;
+    public byte[] downloadImage(String imageUrl) {
+        if (!isHttpUrl(imageUrl)) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "이미지 URL이 비어 있거나 올바르지 않습니다.");
         }
 
-        ZipEntry entry = new ZipEntry("failed_images.txt");
-        zipOutputStream.putNextEntry(entry);
-        zipOutputStream.write("row\tname\turl\treason\n".getBytes(StandardCharsets.UTF_8));
-        for (ImageDownloadFailure failure : failures) {
-            String line = String.join(
-                    "\t",
-                    String.valueOf(failure.rowNumber()),
-                    sanitizeFailureField(failure.name()),
-                    sanitizeFailureField(failure.url()),
-                    sanitizeFailureField(failure.reason())
-            ) + "\n";
-            zipOutputStream.write(line.getBytes(StandardCharsets.UTF_8));
+        try {
+            return fetchImage(imageUrl);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "이미지 다운로드가 중단되었습니다.");
         }
-        zipOutputStream.closeEntry();
-    }
-
-    private String sanitizeFailureField(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
-    }
-
-    private record ImageDownloadFailure(int rowNumber, String name, String url, String reason) {
     }
 
     private byte[] fetchImage(String imageUrl) throws IOException, InterruptedException {
@@ -889,14 +848,6 @@ public class ProductExcelProcessingService {
                 ? "input.xlsx"
                 : originalFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
         String filename = "keyword_result_" + baseName;
-        return URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
-    }
-
-    private String buildImageZipFilename(String originalFilename) {
-        String baseName = originalFilename == null || originalFilename.isBlank()
-                ? "input"
-                : originalFilename.replaceAll("\\.(xlsx|xls)$", "").replaceAll("[\\\\/:*?\"<>|]", "_");
-        String filename = "product_images_" + baseName + ".zip";
         return URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
     }
 

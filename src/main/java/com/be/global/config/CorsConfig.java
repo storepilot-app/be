@@ -22,7 +22,7 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOrigins(authProperties.allowedOrigins().toArray(String[]::new))
                 .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("Content-Disposition", "X-Saved-Image-Count", "X-Failed-Image-Count")
+                .exposedHeaders("Content-Disposition")
                 .allowCredentials(true);
     }
 
@@ -32,7 +32,7 @@ public class CorsConfig implements WebMvcConfigurer {
         configuration.setAllowedOrigins(authProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Content-Disposition", "X-Saved-Image-Count", "X-Failed-Image-Count"));
+        configuration.setExposedHeaders(List.of("Content-Disposition"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

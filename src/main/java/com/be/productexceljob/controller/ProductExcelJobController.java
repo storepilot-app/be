@@ -3,7 +3,8 @@ package com.be.productexceljob.controller;
 import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.productexceljob.dto.ExcelDownloadResult;
-import com.be.productexceljob.dto.ImageZipDownloadResult;
+import com.be.productexceljob.dto.ProductImageDownloadPrepareResponse;
+import com.be.productexceljob.dto.ProductImageDownloadRequest;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
 import com.be.productexceljob.service.ProductExcelProcessingService;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,7 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ProductExcelJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    private static final String ZIP_CONTENT_TYPE = "application/zip";
 
     private final ProductExcelJobService productExcelJobService;
     private final ProductExcelProcessingService productExcelProcessingService;
@@ -70,21 +71,26 @@ public class ProductExcelJobController {
     }
 
     @Operation(
-            summary = "상품 이미지 ZIP 다운로드",
-            description = "목록이미지1 컬럼의 이미지 URL을 읽어 이미지를 다운로드하고 ZIP 파일로 반환합니다."
+            summary = "상품 이미지 다운로드 목록 생성",
+            description = "목록이미지1 컬럼의 이미지 URL을 읽어 브라우저 폴더 저장에 사용할 이미지 목록을 반환합니다."
     )
-    @PostMapping(value = "/images/download-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ByteArrayResource> downloadImagesZip(
+    @PostMapping(value = "/images/prepare", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CommonResponse<ProductImageDownloadPrepareResponse> prepareImageDownloads(
             @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        ImageZipDownloadResult result = productExcelProcessingService.downloadImagesAsZip(file);
+        ProductImageDownloadPrepareResponse response = productExcelProcessingService.prepareImageDownloads(file);
+        return CommonResponse.success(response, "이미지 다운로드 목록을 생성했습니다.");
+    }
 
+    @Operation(summary = "상품 이미지 단건 다운로드")
+    @PostMapping(value = "/images/download", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ByteArrayResource> downloadImage(
+            @RequestBody ProductImageDownloadRequest request
+    ) {
+        byte[] image = productExcelProcessingService.downloadImage(request.url());
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(ZIP_CONTENT_TYPE))
-                .header("X-Saved-Image-Count", String.valueOf(result.savedCount()))
-                .header("X-Failed-Image-Count", String.valueOf(result.failedCount()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())
-                .body(new ByteArrayResource(result.content()));
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(new ByteArrayResource(image));
     }
 }
