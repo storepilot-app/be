@@ -68,10 +68,6 @@ public class ProductExcelJobService {
 
     public ExcelDownloadResult download(long jobId, Long userId) {
         ProductExcelJob job = findJob(jobId, userId);
-        return download(job);
-    }
-
-    private ExcelDownloadResult download(ProductExcelJob job) {
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {

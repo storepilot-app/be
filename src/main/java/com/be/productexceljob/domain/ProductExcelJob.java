@@ -2,7 +2,9 @@ package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import lombok.Getter;
 
+@Getter
 public class ProductExcelJob {
     private final long jobId;
     private final Long userId;
@@ -76,63 +78,4 @@ public class ProductExcelJob {
         this.message = message;
     }
 
-    public long getJobId() {
-        return jobId;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public String getOriginalFilename() {
-        return originalFilename;
-    }
-
-    public Path getUploadedFilePath() {
-        return uploadedFilePath;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public ProductExcelJobStatus getStatus() {
-        return status;
-    }
-
-    public int getTotalCount() {
-        return totalCount;
-    }
-
-    public int getProcessedCount() {
-        return processedCount;
-    }
-
-    public int getProgress() {
-        return progress;
-    }
-
-    public String getStage() {
-        return stage;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public Long getCategoryElapsedMillis() {
-        return categoryElapsedMillis;
-    }
-
-    public Long getKeywordElapsedMillis() {
-        return keywordElapsedMillis;
-    }
-
-    public String getResultFilename() {
-        return resultFilename;
-    }
-
-    public byte[] getResultContent() {
-        return resultContent;
-    }
 }
