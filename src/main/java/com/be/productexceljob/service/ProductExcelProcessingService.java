@@ -115,7 +115,7 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            ProductExcelProgressCallback progressCallback
     ) {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
             return fillAndDownload(
@@ -125,7 +125,7 @@ public class ProductExcelProcessingService {
                     categoryColumn,
                     keywordCount,
                     userId,
-                    progressListener
+                    progressCallback
             );
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
@@ -139,7 +139,7 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            ProductExcelProgressCallback progressCallback
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -184,9 +184,9 @@ public class ProductExcelProcessingService {
             Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
                     products,
                     userId,
-                    progressListener
+                    progressCallback
             );
-            progressListener.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+            progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
 
             long keywordStartedAt = System.nanoTime();
             Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
@@ -242,9 +242,9 @@ public class ProductExcelProcessingService {
             }
             writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             keywordDetailSheetWriter.write(workbook, keywordDetails);
-            progressListener.onKeywordCompleted(elapsedMillis(keywordStartedAt));
+            progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
-            progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
+            progressCallback.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
             String filename = buildDownloadFilename(originalFilename);
             return new ExcelDownloadResult(filename, outputStream.toByteArray());
@@ -258,11 +258,11 @@ public class ProductExcelProcessingService {
     private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
             List<CategoryMatchProductRequest> products,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            ProductExcelProgressCallback progressCallback
     ) {
         Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
         int totalCount = products.size();
-        progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
+        progressCallback.onProgress(0, totalCount, "카테고리 검색 준비 중");
 
         long allBatchesStartedAt = System.nanoTime();
         int batchNumber = 0;
@@ -280,7 +280,7 @@ public class ProductExcelProcessingService {
                     totalCount,
                     elapsedMillis(batchStartedAt)
             );
-            progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
+            progressCallback.onProgress(end, totalCount, "카테고리 찾는 중");
         }
         log.info(
                 "category_all_batches_timing batches={} products={} elapsedMs={}",

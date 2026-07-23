@@ -1,6 +1,6 @@
 package com.be.productexceljob.service;
 
-public interface ProductExcelJobProgressListener {
+public interface ProductExcelProgressCallback {
     void onProgress(int processedCount, int totalCount, String stage);
 
     default void onCategoryCompleted(long elapsedMillis) {

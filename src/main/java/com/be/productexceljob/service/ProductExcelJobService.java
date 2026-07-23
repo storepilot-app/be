@@ -86,7 +86,7 @@ public class ProductExcelJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserId(),
-                    progressListener(job)
+                    progressCallback(job)
             );
             job.complete(result.filename(), result.content());
         } catch (Exception error) {
@@ -99,8 +99,8 @@ public class ProductExcelJobService {
         }
     }
 
-    private ProductExcelJobProgressListener progressListener(ProductExcelJob job) {
-        return new ProductExcelJobProgressListener() {
+    private ProductExcelProgressCallback progressCallback(ProductExcelJob job) {
+        return new ProductExcelProgressCallback() {
             @Override
             public void onProgress(int processedCount, int totalCount, String stage) {
                 job.updateProgress(processedCount, totalCount, stage);
