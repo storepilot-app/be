@@ -42,9 +42,11 @@ public class ProductExcelJobController {
     public CommonResponse<ProductExcelJobCreateResponse> create(
             @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "상품 엑셀 파일", required = true)
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @Parameter(description = "결과 엑셀에 선택 과정 확인용 열을 포함할지 여부")
+            @RequestParam(value = "includeSelectionDetails", defaultValue = "true") boolean includeSelectionDetails
     ) {
-        ProductExcelJobCreateResponse response = productExcelJobService.create(file, loginUser.id());
+        ProductExcelJobCreateResponse response = productExcelJobService.create(file, loginUser.id(), includeSelectionDetails);
         return CommonResponse.success(response, response.message());
     }
 

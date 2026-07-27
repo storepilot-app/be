@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductExcelJobService {
     private static final String PRODUCT_NAME_COLUMN = "상품명";
     private static final int KEYWORD_COUNT = 30;
@@ -35,7 +37,7 @@ public class ProductExcelJobService {
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId) {
+    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId, boolean includeSelectionDetails) {
         validateUserId(userId);
         productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
@@ -55,9 +57,10 @@ public class ProductExcelJobService {
                 jobId,
                 userId,
                 filename,
-                targetPath
+                targetPath,
+                includeSelectionDetails
         ));
-        productExcelJobExecutor.execute(() -> process(job));
+        productExcelJobExecutor.execute(() -> process(job)); //process(job)을 지금 요청 스레드에서 바로 실행하지 말고 productExcelJobExecutor가 관리하는 백그라운드 스레드에서 실행
         return ProductExcelJobCreateResponse.from(job);
     }
 
@@ -68,10 +71,6 @@ public class ProductExcelJobService {
 
     public ExcelDownloadResult download(long jobId, Long userId) {
         ProductExcelJob job = findJob(jobId, userId);
-        return download(job);
-    }
-
-    private ExcelDownloadResult download(ProductExcelJob job) {
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {
@@ -90,22 +89,8 @@ public class ProductExcelJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserId(),
-                    new ProductExcelJobProgressListener() {
-                        @Override
-                        public void onProgress(int processedCount, int totalCount, String stage) {
-                            job.updateProgress(processedCount, totalCount, stage);
-                        }
-
-                        @Override
-                        public void onCategoryCompleted(long elapsedMillis) {
-                            job.recordCategoryElapsed(elapsedMillis);
-                        }
-
-                        @Override
-                        public void onKeywordCompleted(long elapsedMillis) {
-                            job.recordKeywordElapsed(elapsedMillis);
-                        }
-                    }
+                    job.isIncludeSelectionDetails(),
+                    progressCallback(job)
             );
             job.complete(result.filename(), result.content());
         } catch (Exception error) {
@@ -116,6 +101,25 @@ public class ProductExcelJobService {
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
+    }
+
+    private ProductExcelProgressCallback progressCallback(ProductExcelJob job) {
+        return new ProductExcelProgressCallback() {
+            @Override
+            public void onProgress(int processedCount, int totalCount, String stage) {
+                job.updateProgress(processedCount, totalCount, stage);
+            }
+
+            @Override
+            public void onCategoryCompleted(long elapsedMillis) {
+                job.recordCategoryElapsed(elapsedMillis);
+            }
+
+            @Override
+            public void onKeywordCompleted(long elapsedMillis) {
+                job.recordKeywordElapsed(elapsedMillis);
+            }
+        };
     }
 
     private ProductExcelJob findJob(long jobId, Long userId) {
@@ -154,7 +158,8 @@ public class ProductExcelJobService {
                     }
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException error) {
+            log.warn("업로드 임시 파일 삭제 실패: {}", uploadedFilePath, error);
         }
     }
 }

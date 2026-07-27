@@ -2,12 +2,15 @@ package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import lombok.Getter;
 
+@Getter
 public class ProductExcelJob {
     private final long jobId;
     private final Long userId;
     private final String originalFilename;
     private final Path uploadedFilePath;
+    private final boolean includeSelectionDetails;
     private final Instant createdAt;
     private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
@@ -20,19 +23,32 @@ public class ProductExcelJob {
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
-    private ProductExcelJob(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
+    private ProductExcelJob(
+            long jobId,
+            Long userId,
+            String originalFilename,
+            Path uploadedFilePath,
+            boolean includeSelectionDetails
+    ) {
         this.jobId = jobId;
         this.userId = userId;
         this.originalFilename = originalFilename;
         this.uploadedFilePath = uploadedFilePath;
+        this.includeSelectionDetails = includeSelectionDetails;
         this.createdAt = Instant.now();
         this.status = ProductExcelJobStatus.PENDING;
         this.stage = "작업 대기 중";
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
     }
 
-    public static ProductExcelJob register(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
-        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath);
+    public static ProductExcelJob register(
+            long jobId,
+            Long userId,
+            String originalFilename,
+            Path uploadedFilePath,
+            boolean includeSelectionDetails
+    ) {
+        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath, includeSelectionDetails);
     }
 
     public synchronized void start() {
@@ -76,63 +92,4 @@ public class ProductExcelJob {
         this.message = message;
     }
 
-    public long getJobId() {
-        return jobId;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public String getOriginalFilename() {
-        return originalFilename;
-    }
-
-    public Path getUploadedFilePath() {
-        return uploadedFilePath;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public ProductExcelJobStatus getStatus() {
-        return status;
-    }
-
-    public int getTotalCount() {
-        return totalCount;
-    }
-
-    public int getProcessedCount() {
-        return processedCount;
-    }
-
-    public int getProgress() {
-        return progress;
-    }
-
-    public String getStage() {
-        return stage;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public Long getCategoryElapsedMillis() {
-        return categoryElapsedMillis;
-    }
-
-    public Long getKeywordElapsedMillis() {
-        return keywordElapsedMillis;
-    }
-
-    public String getResultFilename() {
-        return resultFilename;
-    }
-
-    public byte[] getResultContent() {
-        return resultContent;
-    }
 }

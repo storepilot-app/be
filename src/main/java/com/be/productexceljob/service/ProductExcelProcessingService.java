@@ -115,7 +115,8 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            boolean includeSelectionDetails,
+            ProductExcelProgressCallback progressCallback
     ) {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
             return fillAndDownload(
@@ -125,7 +126,8 @@ public class ProductExcelProcessingService {
                     categoryColumn,
                     keywordCount,
                     userId,
-                    progressListener
+                    includeSelectionDetails,
+                    progressCallback
             );
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read excel file.");
@@ -139,7 +141,8 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            boolean includeSelectionDetails,
+            ProductExcelProgressCallback progressCallback
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -155,8 +158,12 @@ public class ProductExcelProcessingService {
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
-            ensureTopNaverCategoryHeaders(headerRow);
-            applyTopNaverCategoryColumnWidths(sheet);
+            if (includeSelectionDetails) {
+                ensureTopNaverCategoryHeaders(headerRow);
+                applyTopNaverCategoryColumnWidths(sheet);
+            } else {
+                hideSelectionDetailColumns(sheet);
+            }
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
@@ -184,9 +191,9 @@ public class ProductExcelProcessingService {
             Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
                     products,
                     userId,
-                    progressListener
+                    progressCallback
             );
-            progressListener.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+            progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
 
             long keywordStartedAt = System.nanoTime();
             Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
@@ -234,17 +241,21 @@ public class ProductExcelProcessingService {
                 }
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
-                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
-                writeSelectedCategory(row, myCategoryResult);
-                writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                if (includeSelectionDetails) {
+                    row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
+                    writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeSelectedCategory(row, myCategoryResult);
+                    writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
+                    writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                }
             }
-            writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            if (includeSelectionDetails) {
+                writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            }
             keywordDetailSheetWriter.write(workbook, keywordDetails);
-            progressListener.onKeywordCompleted(elapsedMillis(keywordStartedAt));
+            progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
-            progressListener.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
+            progressCallback.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
             String filename = buildDownloadFilename(originalFilename);
             return new ExcelDownloadResult(filename, outputStream.toByteArray());
@@ -258,11 +269,11 @@ public class ProductExcelProcessingService {
     private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
             List<CategoryMatchProductRequest> products,
             Long userId,
-            ProductExcelJobProgressListener progressListener
+            ProductExcelProgressCallback progressCallback
     ) {
         Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
         int totalCount = products.size();
-        progressListener.onProgress(0, totalCount, "카테고리 검색 준비 중");
+        progressCallback.onProgress(0, totalCount, "카테고리 검색 준비 중");
 
         long allBatchesStartedAt = System.nanoTime();
         int batchNumber = 0;
@@ -280,7 +291,7 @@ public class ProductExcelProcessingService {
                     totalCount,
                     elapsedMillis(batchStartedAt)
             );
-            progressListener.onProgress(end, totalCount, "카테고리 찾는 중");
+            progressCallback.onProgress(end, totalCount, "카테고리 찾는 중");
         }
         log.info(
                 "category_all_batches_timing batches={} products={} elapsedMs={}",
@@ -445,14 +456,29 @@ public class ProductExcelProcessingService {
     }
 
     private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
+        sheet.setColumnHidden(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, false);
         sheet.setColumnWidth(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
-            sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+            int columnIndex = TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index;
+            sheet.setColumnHidden(columnIndex, false);
+            sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
+        sheet.setColumnHidden(SELECTED_CATEGORY_COLUMN_INDEX, false);
         sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnHidden(LLM_STATUS_COLUMN_INDEX, false);
         sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
-            sheet.setColumnWidth(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+            int columnIndex = CATEGORY_EMBEDDING_START_COLUMN_INDEX + index;
+            sheet.setColumnHidden(columnIndex, false);
+            sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+        }
+    }
+
+    private void hideSelectionDetailColumns(Sheet sheet) {
+        for (int columnIndex = TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX;
+             columnIndex < CATEGORY_EMBEDDING_START_COLUMN_INDEX + CATEGORY_EMBEDDING_COUNT;
+             columnIndex++) {
+            sheet.setColumnHidden(columnIndex, true);
         }
     }
 
