@@ -115,6 +115,7 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
+            boolean includeSelectionDetails,
             ProductExcelProgressCallback progressCallback
     ) {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
@@ -125,6 +126,7 @@ public class ProductExcelProcessingService {
                     categoryColumn,
                     keywordCount,
                     userId,
+                    includeSelectionDetails,
                     progressCallback
             );
         } catch (IOException e) {
@@ -139,6 +141,7 @@ public class ProductExcelProcessingService {
             String categoryColumn,
             Integer keywordCount,
             Long userId,
+            boolean includeSelectionDetails,
             ProductExcelProgressCallback progressCallback
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
@@ -155,8 +158,12 @@ public class ProductExcelProcessingService {
             ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
             ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
             ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
-            ensureTopNaverCategoryHeaders(headerRow);
-            applyTopNaverCategoryColumnWidths(sheet);
+            if (includeSelectionDetails) {
+                ensureTopNaverCategoryHeaders(headerRow);
+                applyTopNaverCategoryColumnWidths(sheet);
+            } else {
+                hideSelectionDetailColumns(sheet);
+            }
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
@@ -234,13 +241,17 @@ public class ProductExcelProcessingService {
                 }
                 row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
                 writeNaverCategory(row, myCategoryResult);
-                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
-                writeSelectedCategory(row, myCategoryResult);
-                writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                if (includeSelectionDetails) {
+                    row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
+                    writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeSelectedCategory(row, myCategoryResult);
+                    writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
+                    writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                }
             }
-            writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            if (includeSelectionDetails) {
+                writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
+            }
             keywordDetailSheetWriter.write(workbook, keywordDetails);
             progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
@@ -445,14 +456,29 @@ public class ProductExcelProcessingService {
     }
 
     private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
+        sheet.setColumnHidden(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, false);
         sheet.setColumnWidth(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
-            sheet.setColumnWidth(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+            int columnIndex = TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index;
+            sheet.setColumnHidden(columnIndex, false);
+            sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
+        sheet.setColumnHidden(SELECTED_CATEGORY_COLUMN_INDEX, false);
         sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnHidden(LLM_STATUS_COLUMN_INDEX, false);
         sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
-            sheet.setColumnWidth(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+            int columnIndex = CATEGORY_EMBEDDING_START_COLUMN_INDEX + index;
+            sheet.setColumnHidden(columnIndex, false);
+            sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
+        }
+    }
+
+    private void hideSelectionDetailColumns(Sheet sheet) {
+        for (int columnIndex = TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX;
+             columnIndex < CATEGORY_EMBEDDING_START_COLUMN_INDEX + CATEGORY_EMBEDDING_COUNT;
+             columnIndex++) {
+            sheet.setColumnHidden(columnIndex, true);
         }
     }
 

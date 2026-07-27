@@ -10,6 +10,7 @@ public class ProductExcelJob {
     private final Long userId;
     private final String originalFilename;
     private final Path uploadedFilePath;
+    private final boolean includeSelectionDetails;
     private final Instant createdAt;
     private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
@@ -22,19 +23,32 @@ public class ProductExcelJob {
     private volatile String resultFilename;
     private volatile byte[] resultContent;
 
-    private ProductExcelJob(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
+    private ProductExcelJob(
+            long jobId,
+            Long userId,
+            String originalFilename,
+            Path uploadedFilePath,
+            boolean includeSelectionDetails
+    ) {
         this.jobId = jobId;
         this.userId = userId;
         this.originalFilename = originalFilename;
         this.uploadedFilePath = uploadedFilePath;
+        this.includeSelectionDetails = includeSelectionDetails;
         this.createdAt = Instant.now();
         this.status = ProductExcelJobStatus.PENDING;
         this.stage = "작업 대기 중";
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
     }
 
-    public static ProductExcelJob register(long jobId, Long userId, String originalFilename, Path uploadedFilePath) {
-        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath);
+    public static ProductExcelJob register(
+            long jobId,
+            Long userId,
+            String originalFilename,
+            Path uploadedFilePath,
+            boolean includeSelectionDetails
+    ) {
+        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath, includeSelectionDetails);
     }
 
     public synchronized void start() {

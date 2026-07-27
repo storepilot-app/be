@@ -37,7 +37,7 @@ public class ProductExcelJobService {
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId) {
+    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId, boolean includeSelectionDetails) {
         validateUserId(userId);
         productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
@@ -57,7 +57,8 @@ public class ProductExcelJobService {
                 jobId,
                 userId,
                 filename,
-                targetPath
+                targetPath,
+                includeSelectionDetails
         ));
         productExcelJobExecutor.execute(() -> process(job)); //process(job)을 지금 요청 스레드에서 바로 실행하지 말고 productExcelJobExecutor가 관리하는 백그라운드 스레드에서 실행
         return ProductExcelJobCreateResponse.from(job);
@@ -88,6 +89,7 @@ public class ProductExcelJobService {
                     "",
                     KEYWORD_COUNT,
                     job.getUserId(),
+                    job.isIncludeSelectionDetails(),
                     progressCallback(job)
             );
             job.complete(result.filename(), result.content());
