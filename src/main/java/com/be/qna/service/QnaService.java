@@ -4,6 +4,7 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.qna.domain.QnaFaq;
 import com.be.qna.domain.QnaQuestion;
+import com.be.qna.dto.QnaFaqSaveRequest;
 import com.be.qna.dto.QnaQuestionAnswerRequest;
 import com.be.qna.dto.QnaQuestionCreateRequest;
 import com.be.qna.repository.QnaFaqRepository;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class QnaService {
     private static final int TITLE_MAX_LENGTH = 200;
+    private static final int FAQ_QUESTION_MAX_LENGTH = 300;
     private static final int CONTENT_MAX_LENGTH = 5000;
     private static final int ANSWER_MAX_LENGTH = 5000;
 
@@ -26,6 +28,10 @@ public class QnaService {
 
     public List<QnaFaq> getActiveFaqs() {
         return qnaFaqRepository.findByActiveTrueOrderBySortOrderAscIdAsc();
+    }
+
+    public List<QnaFaq> getAllFaqs() {
+        return qnaFaqRepository.findAllByOrderBySortOrderAscIdAsc();
     }
 
     public List<QnaQuestion> getMyQuestions(Long userId) {
@@ -46,6 +52,52 @@ public class QnaService {
     public QnaQuestion getQuestion(Long questionId) {
         return qnaQuestionRepository.findById(questionId)
                 .orElseThrow(() -> invalid("문의를 찾을 수 없습니다."));
+    }
+
+    @Transactional
+    public QnaFaq createFaq(QnaFaqSaveRequest request) {
+        if (request == null) {
+            throw invalid("FAQ 내용이 필요합니다.");
+        }
+
+        String question = required(request.question(), "FAQ 질문을 입력해 주세요.");
+        String answer = required(request.answer(), "FAQ 답변을 입력해 주세요.");
+        int sortOrder = request.sortOrder() == null ? 0 : Math.max(0, request.sortOrder());
+        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "FAQ 질문은 300자 이하로 입력해 주세요.");
+        validateMaxLength(answer, ANSWER_MAX_LENGTH, "FAQ 답변은 5000자 이하로 입력해 주세요.");
+
+        return qnaFaqRepository.save(QnaFaq.create(question, answer, sortOrder));
+    }
+
+    @Transactional
+    public QnaFaq updateFaq(Long faqId, QnaFaqSaveRequest request) {
+        if (request == null) {
+            throw invalid("FAQ 내용이 필요합니다.");
+        }
+
+        String question = required(request.question(), "FAQ 질문을 입력해 주세요.");
+        String answer = required(request.answer(), "FAQ 답변을 입력해 주세요.");
+        int sortOrder = request.sortOrder() == null ? 0 : Math.max(0, request.sortOrder());
+        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "FAQ 질문은 300자 이하로 입력해 주세요.");
+        validateMaxLength(answer, ANSWER_MAX_LENGTH, "FAQ 답변은 5000자 이하로 입력해 주세요.");
+
+        QnaFaq faq = getFaq(faqId);
+        faq.update(question, answer, sortOrder);
+        return faq;
+    }
+
+    @Transactional
+    public QnaFaq activateFaq(Long faqId) {
+        QnaFaq faq = getFaq(faqId);
+        faq.activate();
+        return faq;
+    }
+
+    @Transactional
+    public QnaFaq deactivateFaq(Long faqId) {
+        QnaFaq faq = getFaq(faqId);
+        faq.deactivate();
+        return faq;
     }
 
     @Transactional
@@ -82,6 +134,11 @@ public class QnaService {
         if (userId == null) {
             throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED, "로그인이 필요합니다.");
         }
+    }
+
+    private QnaFaq getFaq(Long faqId) {
+        return qnaFaqRepository.findById(faqId)
+                .orElseThrow(() -> invalid("FAQ를 찾을 수 없습니다."));
     }
 
     private String required(String value, String message) {
