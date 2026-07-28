@@ -21,7 +21,8 @@ public class ApiExceptionHandler {
         if (errorCode == ErrorCode.INVALID_EXCEL_FILE
                 || errorCode == ErrorCode.INVALID_NAVER_CATEGORY_FILE
                 || errorCode == ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE
-                || errorCode == ErrorCode.AUTH_INVALID) {
+                || errorCode == ErrorCode.AUTH_INVALID
+                || errorCode == ErrorCode.INVALID_QNA_REQUEST) {
             return HttpStatus.BAD_REQUEST;
         }
         if (errorCode == ErrorCode.AUTH_UNAUTHORIZED) {
