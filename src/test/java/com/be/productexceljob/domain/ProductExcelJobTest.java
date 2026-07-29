@@ -10,7 +10,7 @@ class ProductExcelJobTest {
     void tracksBatchProgressAndCompletesAtOneHundredPercent() {
         ProductExcelJob job = ProductExcelJob.register(1L, 1L, "input.xlsx", Path.of("input.xlsx"), true);
 
-        job.start();
+        job.markProcessing();
         job.updateProgress(30, 100, "카테고리 찾는 중");
         job.recordCategoryElapsed(1_250);
         job.recordKeywordElapsed(340);
@@ -22,7 +22,7 @@ class ProductExcelJobTest {
         assertEquals(1_250L, job.getCategoryElapsedMillis());
         assertEquals(340L, job.getKeywordElapsedMillis());
 
-        job.complete("result.xlsx", new byte[]{1});
+        job.markCompleted("result.xlsx", new byte[]{1});
 
         assertEquals(ProductExcelJobStatus.COMPLETED, job.getStatus());
         assertEquals(100, job.getProgress());

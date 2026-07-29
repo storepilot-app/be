@@ -51,7 +51,7 @@ public class ProductExcelJob {
         return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath, includeSelectionDetails);
     }
 
-    public synchronized void start() {
+    public synchronized void markProcessing() {
         status = ProductExcelJobStatus.PROCESSING;
         stage = "엑셀 분석 중";
         message = "카테고리 찾기 작업을 처리하고 있습니다.";
@@ -68,7 +68,7 @@ public class ProductExcelJob {
         }
     }
 
-    public synchronized void complete(String resultFilename, byte[] resultContent) {
+    public synchronized void markCompleted(String resultFilename, byte[] resultContent) {
         this.resultFilename = resultFilename;
         this.resultContent = resultContent;
         this.processedCount = totalCount;
@@ -86,7 +86,7 @@ public class ProductExcelJob {
         this.keywordElapsedMillis = Math.max(0L, elapsedMillis);
     }
 
-    public synchronized void fail(String message) {
+    public synchronized void markFailed(String message) {
         this.status = ProductExcelJobStatus.FAILED;
         this.stage = "실패";
         this.message = message;

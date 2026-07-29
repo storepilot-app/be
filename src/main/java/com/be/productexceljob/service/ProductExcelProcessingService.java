@@ -1,5 +1,8 @@
 package com.be.productexceljob.service;
 
+import static com.be.productexceljob.excel.ProductExcelLayout.*;
+import static com.be.productexceljob.excel.ProductImageDownloadLayout.*;
+
 import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
@@ -61,33 +64,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class ProductExcelProcessingService {
-    private static final int KEYWORD_COLUMN_INDEX = 11; // L
-    private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
-    private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
-    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
-    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
-    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
-    private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
-    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
-    private static final int CATEGORY_EMBEDDING_START_COLUMN_INDEX = 34; // AI
-    private static final int CATEGORY_EMBEDDING_COUNT = 5;
-    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
-    private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
-    private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
-    private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final String KEYWORD_HEADER = "키워드";
-    private static final String MY_CATEGORY_HEADER = "마이카테";
-    private static final String NAVER_CATEGORY_HEADER = "네이버카테";
-    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
-    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
-    private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
-    private static final String LLM_STATUS_HEADER = "LLM상태";
-    private static final String CATEGORY_EMBEDDING_HEADER_PREFIX = "카테고리검색-";
-    private static final String IMAGE_URL_COLUMN = "목록이미지1";
-    private static final String PRODUCT_CODE_COLUMN = "상품코드";
-    private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
@@ -134,6 +110,7 @@ public class ProductExcelProcessingService {
         }
     }
 
+    // 실제 처리 로직
     private ExcelDownloadResult fillAndDownload(
             InputStream inputStream,
             String originalFilename,
@@ -145,13 +122,16 @@ public class ProductExcelProcessingService {
             ProductExcelProgressCallback progressCallback
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) //AutoCloseable 객체 try문이 끝나면 자동으로 닫힘
+        {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
-            LlmStatusCellStyles llmStatusCellStyles = createLlmStatusCellStyles(workbook);
+
+            CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
+            CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
 
             int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
@@ -243,10 +223,10 @@ public class ProductExcelProcessingService {
                 writeNaverCategory(row, myCategoryResult);
                 if (includeSelectionDetails) {
                     row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                    writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeSimilarProducts(row, myCategoryResult, selectedStyle);
                     writeSelectedCategory(row, myCategoryResult);
-                    writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                    writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeLlmStatus(row, myCategoryResult, selectedStyle, rejectedStyle);
+                    writeCategoryEmbeddingCandidates(row, myCategoryResult, selectedStyle);
                 }
             }
             if (includeSelectionDetails) {
@@ -490,25 +470,6 @@ public class ProductExcelProcessingService {
         return formatter.formatCellValue(cell).trim();
     }
 
-    private String inferMyCategory(String productName, String category) {
-        if (category != null && !category.isBlank()) {
-            String[] parts = category.split(">");
-            String last = parts[parts.length - 1].trim();
-            if (!last.isBlank()) {
-                return last;
-            }
-        }
-
-        String text = productName.toLowerCase(Locale.ROOT);
-        if (text.contains("엽서")) return "엽서";
-        if (text.contains("다이어리")) return "다이어리";
-        if (text.contains("가계부")) return "가계부";
-        if (text.contains("바인더")) return "바인더";
-        if (text.contains("키보드")) return "키보드";
-        if (text.contains("스티커") || text.contains("씰")) return "스티커";
-        return "기타";
-    }
-
     private String resolveMyCategory(MyCategoryMatchResult result) {
         if (result.status() == MyCategoryMatchStatus.MATCHED) {
             return result.myCategoryCode();
@@ -581,13 +542,18 @@ public class ProductExcelProcessingService {
         }
     }
 
-    private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
+    private void writeLlmStatus(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedStyle,
+            CellStyle rejectedStyle
+    ) {
         Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
         if ("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus())) {
-            cell.setCellStyle(styles.selected());
+            cell.setCellStyle(selectedStyle);
         } else if ("REJECTED".equals(result.llmStatus())) {
-            cell.setCellStyle(styles.rejected());
+            cell.setCellStyle(rejectedStyle);
         }
     }
 
@@ -658,19 +624,11 @@ public class ProductExcelProcessingService {
         return value.substring(0, maxLength - 3) + "...";
     }
 
-    private LlmStatusCellStyles createLlmStatusCellStyles(Workbook workbook) {
-        CellStyle selected = workbook.createCellStyle();
-        selected.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
-        selected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        CellStyle rejected = workbook.createCellStyle();
-        rejected.setFillForegroundColor(IndexedColors.ROSE.getIndex());
-        rejected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        return new LlmStatusCellStyles(selected, rejected);
-    }
-
-    private record LlmStatusCellStyles(CellStyle selected, CellStyle rejected) {
+    private CellStyle createFillStyle(Workbook workbook, IndexedColors color) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(color.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
     }
 
     private String formatSimilarProduct(CategoryMatchSimilarProduct product) {

@@ -80,7 +80,7 @@ public class ProductExcelJobService {
     }
 
     private void process(ProductExcelJob job) {
-        job.start();
+        job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
             ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                     job.getUploadedFilePath(),
@@ -92,12 +92,12 @@ public class ProductExcelJobService {
                     job.isIncludeSelectionDetails(),
                     progressCallback(job)
             );
-            job.complete(result.filename(), result.content());
+            job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
         } catch (Exception error) {
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
-            job.fail(message);
+            job.markFailed(message); // 작업 상태를 실패로 표시. 스레드 동작에 영향을 주지 않음
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
