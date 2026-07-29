@@ -134,6 +134,7 @@ public class ProductExcelProcessingService {
         }
     }
 
+    // 실제 처리 로직
     private ExcelDownloadResult fillAndDownload(
             InputStream inputStream,
             String originalFilename,
@@ -488,25 +489,6 @@ public class ProductExcelProcessingService {
             return "";
         }
         return formatter.formatCellValue(cell).trim();
-    }
-
-    private String inferMyCategory(String productName, String category) {
-        if (category != null && !category.isBlank()) {
-            String[] parts = category.split(">");
-            String last = parts[parts.length - 1].trim();
-            if (!last.isBlank()) {
-                return last;
-            }
-        }
-
-        String text = productName.toLowerCase(Locale.ROOT);
-        if (text.contains("엽서")) return "엽서";
-        if (text.contains("다이어리")) return "다이어리";
-        if (text.contains("가계부")) return "가계부";
-        if (text.contains("바인더")) return "바인더";
-        if (text.contains("키보드")) return "키보드";
-        if (text.contains("스티커") || text.contains("씰")) return "스티커";
-        return "기타";
     }
 
     private String resolveMyCategory(MyCategoryMatchResult result) {

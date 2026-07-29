@@ -97,7 +97,7 @@ public class ProductExcelJobService {
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
-            job.markFailed(message);
+            job.markFailed(message); // 작업 상태를 실패로 표시. 스레드 동작에 영향을 주지 않음
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
