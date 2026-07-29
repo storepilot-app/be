@@ -80,7 +80,7 @@ public class ProductExcelJobService {
     }
 
     private void process(ProductExcelJob job) {
-        job.start();
+        job.markProcessing();
         try {
             ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                     job.getUploadedFilePath(),

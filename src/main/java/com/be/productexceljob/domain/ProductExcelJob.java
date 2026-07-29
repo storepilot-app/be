@@ -51,7 +51,7 @@ public class ProductExcelJob {
         return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath, includeSelectionDetails);
     }
 
-    public synchronized void start() {
+    public synchronized void markProcessing() {
         status = ProductExcelJobStatus.PROCESSING;
         stage = "엑셀 분석 중";
         message = "카테고리 찾기 작업을 처리하고 있습니다.";
