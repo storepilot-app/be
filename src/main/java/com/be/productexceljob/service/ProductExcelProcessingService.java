@@ -1,5 +1,8 @@
 package com.be.productexceljob.service;
 
+import static com.be.productexceljob.excel.ProductExcelLayout.*;
+import static com.be.productexceljob.excel.ProductImageDownloadLayout.*;
+
 import com.be.categorymatcher.service.CategoryMatcherService;
 import com.be.categorymatcher.dto.CategoryMatchCandidate;
 import com.be.categorymatcher.dto.CategoryMatchProductRequest;
@@ -61,33 +64,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class ProductExcelProcessingService {
-    private static final int KEYWORD_COLUMN_INDEX = 11; // L
-    private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
-    private static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
-    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
-    private static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
-    private static final int TOP_NAVER_CATEGORIES_COUNT = 5;
-    private static final int SELECTED_CATEGORY_COLUMN_INDEX = 32; // AG
-    private static final int LLM_STATUS_COLUMN_INDEX = 33; // AH
-    private static final int CATEGORY_EMBEDDING_START_COLUMN_INDEX = 34; // AI
-    private static final int CATEGORY_EMBEDDING_COUNT = 5;
-    private static final int TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH = 35 * 256;
-    private static final int TOP_NAVER_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int SELECTED_CATEGORY_COLUMN_WIDTH = 60 * 256;
-    private static final int LLM_STATUS_COLUMN_WIDTH = 50 * 256;
-    private static final int LLM_STATUS_DETAIL_MAX_LENGTH = 180;
-    private static final int DEFAULT_KEYWORD_COUNT = 30;
-    private static final String KEYWORD_HEADER = "키워드";
-    private static final String MY_CATEGORY_HEADER = "마이카테";
-    private static final String NAVER_CATEGORY_HEADER = "네이버카테";
-    private static final String TOP_NAVER_PRODUCT_NAME_HEADER = "상품명";
-    private static final String TOP_NAVER_CATEGORIES_HEADER_PREFIX = "유사상품-";
-    private static final String SELECTED_CATEGORY_HEADER = "선택카테고리";
-    private static final String LLM_STATUS_HEADER = "LLM상태";
-    private static final String CATEGORY_EMBEDDING_HEADER_PREFIX = "카테고리검색-";
-    private static final String IMAGE_URL_COLUMN = "목록이미지1";
-    private static final String PRODUCT_CODE_COLUMN = "상품코드";
-    private static final String PRODUCT_NUMBER_COLUMN = "제품번호";
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
