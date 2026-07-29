@@ -68,7 +68,7 @@ public class ProductExcelJob {
         }
     }
 
-    public synchronized void complete(String resultFilename, byte[] resultContent) {
+    public synchronized void markCompleted(String resultFilename, byte[] resultContent) {
         this.resultFilename = resultFilename;
         this.resultContent = resultContent;
         this.processedCount = totalCount;

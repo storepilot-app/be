@@ -22,7 +22,7 @@ class ProductExcelJobTest {
         assertEquals(1_250L, job.getCategoryElapsedMillis());
         assertEquals(340L, job.getKeywordElapsedMillis());
 
-        job.complete("result.xlsx", new byte[]{1});
+        job.markCompleted("result.xlsx", new byte[]{1});
 
         assertEquals(ProductExcelJobStatus.COMPLETED, job.getStatus());
         assertEquals(100, job.getProgress());
