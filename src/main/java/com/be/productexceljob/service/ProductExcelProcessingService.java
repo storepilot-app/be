@@ -130,39 +130,18 @@ public class ProductExcelProcessingService {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
 
-            CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
-            CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
-
-            int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
-            int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
-            ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
-            ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
-            ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
-            if (includeSelectionDetails) {
-                ensureTopNaverCategoryHeaders(headerRow);
-                applyTopNaverCategoryColumnWidths(sheet);
-            } else {
-                hideSelectionDetailColumns(sheet);
-            }
+            ProductExcelSheetContext sheetContext = prepareSheet(
+                    workbook,
+                    sheet,
+                    headerRow,
+                    productNameColumn,
+                    categoryColumn,
+                    includeSelectionDetails
+            );
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
-            List<ProductExcelRow> productRows = new ArrayList<>();
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                String productName = readCell(row, productNameColumnIndex, formatter);
-                String category = categoryColumnIndex < 0 ? "" : readCell(row, categoryColumnIndex, formatter);
-                if (productName.isBlank()) {
-                    continue;
-                }
-
-                productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
-            }
+            List<ProductExcelRow> productRows = readProductRows(sheet, sheetContext, formatter);
 
             List<CategoryMatchProductRequest> products = productRows.stream()
                     .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
@@ -186,49 +165,15 @@ public class ProductExcelProcessingService {
                             ))
                             .toList()
             );
-            List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
-
-            for (ProductExcelRow productRow : productRows) {
-                Row row = productRow.row();
-                String productName = productRow.productName();
-                String category = productRow.category();
-                MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
-                        productRow.rowId(),
-                        MyCategoryMatchResult.noCategoryMatch()
-                );
-                String myCategory = resolveMyCategory(myCategoryResult);
-                String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
-                List<GeneratedKeyword> keywords = generateKeywords(
-                        productName,
-                        keywordCategory,
-                        repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
-                        resolvedKeywordCount
-                );
-
-                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
-                        .map(keyword -> keyword.score().keyword())
-                        .collect(java.util.stream.Collectors.joining(", ")));
-                for (int index = 0; index < keywords.size(); index++) {
-                    GeneratedKeyword keyword = keywords.get(index);
-                    keywordDetails.add(new KeywordDetailEntry(
-                            productRow.rowId() + 1,
-                            productName,
-                            keywordCategory,
-                            index + 1,
-                            keyword.score(),
-                            keyword.reasons()
-                    ));
-                }
-                row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
-                writeNaverCategory(row, myCategoryResult);
-                if (includeSelectionDetails) {
-                    row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                    writeSimilarProducts(row, myCategoryResult, selectedStyle);
-                    writeSelectedCategory(row, myCategoryResult);
-                    writeLlmStatus(row, myCategoryResult, selectedStyle, rejectedStyle);
-                    writeCategoryEmbeddingCandidates(row, myCategoryResult, selectedStyle);
-                }
-            }
+            List<KeywordDetailEntry> keywordDetails = writeProductResultRows(
+                    productRows,
+                    myCategoryResults,
+                    keywordCategories,
+                    repeatedPhrases,
+                    resolvedKeywordCount,
+                    sheetContext,
+                    includeSelectionDetails
+            );
             if (includeSelectionDetails) {
                 writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             }
@@ -280,6 +225,126 @@ public class ProductExcelProcessingService {
                 elapsedMillis(allBatchesStartedAt)
         );
         return results;
+    }
+
+    private ProductExcelSheetContext prepareSheet(
+            Workbook workbook,
+            Sheet sheet,
+            Row headerRow,
+            String productNameColumn,
+            String categoryColumn,
+            boolean includeSelectionDetails
+    ) {
+        CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
+        CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
+
+        int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
+        int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
+        ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
+        ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
+        ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
+        if (includeSelectionDetails) {
+            ensureTopNaverCategoryHeaders(headerRow);
+            applyTopNaverCategoryColumnWidths(sheet);
+        } else {
+            hideSelectionDetailColumns(sheet);
+        }
+
+        return new ProductExcelSheetContext(
+                productNameColumnIndex,
+                categoryColumnIndex,
+                selectedStyle,
+                rejectedStyle
+        );
+    }
+
+    private List<ProductExcelRow> readProductRows(
+            Sheet sheet,
+            ProductExcelSheetContext sheetContext,
+            DataFormatter formatter
+    ) {
+        List<ProductExcelRow> productRows = new ArrayList<>();
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+
+            String productName = readCell(row, sheetContext.productNameColumnIndex(), formatter);
+            String category = sheetContext.categoryColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.categoryColumnIndex(), formatter);
+            if (productName.isBlank()) {
+                continue;
+            }
+
+            productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
+        }
+        return productRows;
+    }
+
+    private List<KeywordDetailEntry> writeProductResultRows(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults,
+            Map<Integer, String> keywordCategories,
+            Map<Integer, List<String>> repeatedPhrases,
+            int resolvedKeywordCount,
+            ProductExcelSheetContext sheetContext,
+            boolean includeSelectionDetails
+    ) {
+        List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
+
+        for (ProductExcelRow productRow : productRows) {
+            Row row = productRow.row();
+            String productName = productRow.productName();
+            String category = productRow.category();
+            MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
+                    productRow.rowId(),
+                    MyCategoryMatchResult.noCategoryMatch()
+            );
+            String myCategory = resolveMyCategory(myCategoryResult);
+            String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
+            List<GeneratedKeyword> keywords = generateKeywords(
+                    productName,
+                    keywordCategory,
+                    repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
+                    resolvedKeywordCount
+            );
+
+            row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
+                    .map(keyword -> keyword.score().keyword())
+                    .collect(java.util.stream.Collectors.joining(", ")));
+            for (int index = 0; index < keywords.size(); index++) {
+                GeneratedKeyword keyword = keywords.get(index);
+                keywordDetails.add(new KeywordDetailEntry(
+                        productRow.rowId() + 1,
+                        productName,
+                        keywordCategory,
+                        index + 1,
+                        keyword.score(),
+                        keyword.reasons()
+                ));
+            }
+            row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
+            writeNaverCategory(row, myCategoryResult);
+            if (includeSelectionDetails) {
+                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
+                writeSimilarProducts(row, myCategoryResult, sheetContext.selectedStyle());
+                writeSelectedCategory(row, myCategoryResult);
+                writeLlmStatus(row, myCategoryResult, sheetContext.selectedStyle(), sheetContext.rejectedStyle());
+                writeCategoryEmbeddingCandidates(row, myCategoryResult, sheetContext.selectedStyle());
+            }
+        }
+
+        return keywordDetails;
+    }
+
+    private record ProductExcelSheetContext(
+            int productNameColumnIndex,
+            int categoryColumnIndex,
+            CellStyle selectedStyle,
+            CellStyle rejectedStyle
+    ) {
     }
 
     private record ProductExcelRow(int rowId, Row row, String productName, String category) {
