@@ -410,50 +410,88 @@ public class ProductExcelProcessingService {
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
-            }
+            ProductImageDownloadSheetContext sheetContext = prepareImageDownloadSheet(sheet);
+            ProductImageDownloadRows rows = readImageDownloadRows(sheet, sheetContext);
 
-            int imageUrlColumnIndex = findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN);
-            int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
-            int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
-
-            Set<String> entryNames = new LinkedHashSet<>();
-            List<ProductImageDownloadItem> images = new ArrayList<>();
-            List<ProductImageDownloadFailure> failures = new ArrayList<>();
-            DataFormatter formatter = new DataFormatter(Locale.KOREA);
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                String imageUrl = normalizeImageUrl(readCell(row, imageUrlColumnIndex, formatter));
-                String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
-                String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
-                String filenameBase = !productNumber.isBlank() ? productNumber : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
-                if (!isHttpUrl(imageUrl)) {
-                    failures.add(new ProductImageDownloadFailure(
-                            rowIndex + 1,
-                            filenameBase,
-                            imageUrl,
-                            "이미지 URL이 비어 있거나 올바르지 않습니다."
-                    ));
-                    continue;
-                }
-
-                String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
-                images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
-            }
-
-            return new ProductImageDownloadPrepareResponse(images.size(), failures.size(), images, failures);
+            return new ProductImageDownloadPrepareResponse(
+                    rows.images().size(),
+                    rows.failures().size(),
+                    rows.images(),
+                    rows.failures()
+            );
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read image download targets.");
         }
+    }
+
+    private ProductImageDownloadSheetContext prepareImageDownloadSheet(Sheet sheet) {
+        Row headerRow = sheet.getRow(0);
+        if (headerRow == null) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
+        }
+
+        return new ProductImageDownloadSheetContext(
+                findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN),
+                findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN),
+                findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN)
+        );
+    }
+
+    private ProductImageDownloadRows readImageDownloadRows(
+            Sheet sheet,
+            ProductImageDownloadSheetContext sheetContext
+    ) {
+        Set<String> entryNames = new LinkedHashSet<>();
+        List<ProductImageDownloadItem> images = new ArrayList<>();
+        List<ProductImageDownloadFailure> failures = new ArrayList<>();
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+
+            String imageUrl = normalizeImageUrl(readCell(row, sheetContext.imageUrlColumnIndex(), formatter));
+            String productCode = sheetContext.productCodeColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.productCodeColumnIndex(), formatter);
+            String productNumber = sheetContext.productNumberColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.productNumberColumnIndex(), formatter);
+            String filenameBase = !productNumber.isBlank()
+                    ? productNumber
+                    : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
+            if (!isHttpUrl(imageUrl)) {
+                failures.add(new ProductImageDownloadFailure(
+                        rowIndex + 1,
+                        filenameBase,
+                        imageUrl,
+                        "이미지 URL이 비어 있거나 올바르지 않습니다."
+                ));
+                continue;
+            }
+
+            String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
+            images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
+        }
+
+        return new ProductImageDownloadRows(images, failures);
+    }
+
+    private record ProductImageDownloadSheetContext(
+            int imageUrlColumnIndex,
+            int productCodeColumnIndex,
+            int productNumberColumnIndex
+    ) {
+    }
+
+    private record ProductImageDownloadRows(
+            List<ProductImageDownloadItem> images,
+            List<ProductImageDownloadFailure> failures
+    ) {
     }
 
     public byte[] downloadImage(String imageUrl) {
