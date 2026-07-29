@@ -97,7 +97,7 @@ public class ProductExcelJobService {
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
-            job.fail(message);
+            job.markFailed(message);
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }

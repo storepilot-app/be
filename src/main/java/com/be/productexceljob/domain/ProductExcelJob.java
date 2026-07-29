@@ -86,7 +86,7 @@ public class ProductExcelJob {
         this.keywordElapsedMillis = Math.max(0L, elapsedMillis);
     }
 
-    public synchronized void fail(String message) {
+    public synchronized void markFailed(String message) {
         this.status = ProductExcelJobStatus.FAILED;
         this.stage = "실패";
         this.message = message;
