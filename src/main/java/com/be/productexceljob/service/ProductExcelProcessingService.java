@@ -146,13 +146,16 @@ public class ProductExcelProcessingService {
             ProductExcelProgressCallback progressCallback
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) //AutoCloseable 객체 try문이 끝나면 자동으로 닫힘
+        {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
-            LlmStatusCellStyles llmStatusCellStyles = createLlmStatusCellStyles(workbook);
+
+            CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
+            CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
 
             int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
             int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
@@ -244,10 +247,10 @@ public class ProductExcelProcessingService {
                 writeNaverCategory(row, myCategoryResult);
                 if (includeSelectionDetails) {
                     row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                    writeSimilarProducts(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeSimilarProducts(row, myCategoryResult, selectedStyle);
                     writeSelectedCategory(row, myCategoryResult);
-                    writeLlmStatus(row, myCategoryResult, llmStatusCellStyles);
-                    writeCategoryEmbeddingCandidates(row, myCategoryResult, llmStatusCellStyles.selected());
+                    writeLlmStatus(row, myCategoryResult, selectedStyle, rejectedStyle);
+                    writeCategoryEmbeddingCandidates(row, myCategoryResult, selectedStyle);
                 }
             }
             if (includeSelectionDetails) {
@@ -563,13 +566,18 @@ public class ProductExcelProcessingService {
         }
     }
 
-    private void writeLlmStatus(Row row, MyCategoryMatchResult result, LlmStatusCellStyles styles) {
+    private void writeLlmStatus(
+            Row row,
+            MyCategoryMatchResult result,
+            CellStyle selectedStyle,
+            CellStyle rejectedStyle
+    ) {
         Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
         if ("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus())) {
-            cell.setCellStyle(styles.selected());
+            cell.setCellStyle(selectedStyle);
         } else if ("REJECTED".equals(result.llmStatus())) {
-            cell.setCellStyle(styles.rejected());
+            cell.setCellStyle(rejectedStyle);
         }
     }
 
@@ -640,19 +648,11 @@ public class ProductExcelProcessingService {
         return value.substring(0, maxLength - 3) + "...";
     }
 
-    private LlmStatusCellStyles createLlmStatusCellStyles(Workbook workbook) {
-        CellStyle selected = workbook.createCellStyle();
-        selected.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
-        selected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        CellStyle rejected = workbook.createCellStyle();
-        rejected.setFillForegroundColor(IndexedColors.ROSE.getIndex());
-        rejected.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        return new LlmStatusCellStyles(selected, rejected);
-    }
-
-    private record LlmStatusCellStyles(CellStyle selected, CellStyle rejected) {
+    private CellStyle createFillStyle(Workbook workbook, IndexedColors color) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(color.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
     }
 
     private String formatSimilarProduct(CategoryMatchSimilarProduct product) {
