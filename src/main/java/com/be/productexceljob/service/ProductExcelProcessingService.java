@@ -142,43 +142,23 @@ public class ProductExcelProcessingService {
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             List<ProductExcelRow> productRows = readProductRows(sheet, sheetContext, formatter);
-
-            List<CategoryMatchProductRequest> products = productRows.stream()
-                    .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
-                    .toList();
-            long categoryStartedAt = System.nanoTime();
-            Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
-                    products,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults = matchCategories(
+                    productRows,
                     userId,
                     progressCallback
             );
-            progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
-
-            long keywordStartedAt = System.nanoTime();
-            Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
-            Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
-                    productRows.stream()
-                            .map(productRow -> new ProductSource(
-                                    productRow.rowId(),
-                                    productRow.productName(),
-                                    keywordCategories.get(productRow.rowId())
-                            ))
-                            .toList()
-            );
-            List<KeywordDetailEntry> keywordDetails = writeProductResultRows(
+            List<KeywordDetailEntry> keywordDetails = writeKeywordsAndResults(
                     productRows,
                     myCategoryResults,
-                    keywordCategories,
-                    repeatedPhrases,
                     resolvedKeywordCount,
                     sheetContext,
-                    includeSelectionDetails
+                    includeSelectionDetails,
+                    progressCallback
             );
             if (includeSelectionDetails) {
                 writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             }
             keywordDetailSheetWriter.write(workbook, keywordDetails);
-            progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
             progressCallback.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
@@ -225,6 +205,56 @@ public class ProductExcelProcessingService {
                 elapsedMillis(allBatchesStartedAt)
         );
         return results;
+    }
+
+    private Map<Integer, MyCategoryMatchResult> matchCategories(
+            List<ProductExcelRow> productRows,
+            Long userId,
+            ProductExcelProgressCallback progressCallback
+    ) {
+        List<CategoryMatchProductRequest> products = productRows.stream()
+                .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
+                .toList();
+        long categoryStartedAt = System.nanoTime();
+        Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
+                products,
+                userId,
+                progressCallback
+        );
+        progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+        return myCategoryResults;
+    }
+
+    private List<KeywordDetailEntry> writeKeywordsAndResults(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults,
+            int resolvedKeywordCount,
+            ProductExcelSheetContext sheetContext,
+            boolean includeSelectionDetails,
+            ProductExcelProgressCallback progressCallback
+    ) {
+        long keywordStartedAt = System.nanoTime();
+        Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
+        Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
+                productRows.stream()
+                        .map(productRow -> new ProductSource(
+                                productRow.rowId(),
+                                productRow.productName(),
+                                keywordCategories.get(productRow.rowId())
+                        ))
+                        .toList()
+        );
+        List<KeywordDetailEntry> keywordDetails = writeProductResultRows(
+                productRows,
+                myCategoryResults,
+                keywordCategories,
+                repeatedPhrases,
+                resolvedKeywordCount,
+                sheetContext,
+                includeSelectionDetails
+        );
+        progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
+        return keywordDetails;
     }
 
     private ProductExcelSheetContext prepareSheet(
@@ -347,7 +377,12 @@ public class ProductExcelProcessingService {
     ) {
     }
 
-    private record ProductExcelRow(int rowId, Row row, String productName, String category) {
+    private record ProductExcelRow(
+            int rowId,
+            Row row,
+            String productName,
+            String category
+    ) {
     }
 
     private long elapsedMillis(long startedAtNanos) {
@@ -843,7 +878,10 @@ public class ProductExcelProcessingService {
         return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
-    private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
+    private record GeneratedKeyword(
+            ScoredKeyword score,
+            List<String> reasons
+    ) {
     }
 
     private String imageExtension(String imageUrl) {
