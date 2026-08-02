@@ -130,110 +130,35 @@ public class ProductExcelProcessingService {
                 throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
             }
 
-            CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
-            CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
-
-            int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
-            int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
-            ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
-            ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
-            ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
-            if (includeSelectionDetails) {
-                ensureTopNaverCategoryHeaders(headerRow);
-                applyTopNaverCategoryColumnWidths(sheet);
-            } else {
-                hideSelectionDetailColumns(sheet);
-            }
+            ProductExcelSheetContext sheetContext = prepareSheet(
+                    workbook,
+                    sheet,
+                    headerRow,
+                    productNameColumn,
+                    categoryColumn,
+                    includeSelectionDetails
+            );
 
             int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
-            List<ProductExcelRow> productRows = new ArrayList<>();
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                String productName = readCell(row, productNameColumnIndex, formatter);
-                String category = categoryColumnIndex < 0 ? "" : readCell(row, categoryColumnIndex, formatter);
-                if (productName.isBlank()) {
-                    continue;
-                }
-
-                productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
-            }
-
-            List<CategoryMatchProductRequest> products = productRows.stream()
-                    .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
-                    .toList();
-            long categoryStartedAt = System.nanoTime();
-            Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
-                    products,
+            List<ProductExcelRow> productRows = readProductRows(sheet, sheetContext, formatter);
+            Map<Integer, MyCategoryMatchResult> myCategoryResults = matchCategories(
+                    productRows,
                     userId,
                     progressCallback
             );
-            progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
-
-            long keywordStartedAt = System.nanoTime();
-            Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
-            Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
-                    productRows.stream()
-                            .map(productRow -> new ProductSource(
-                                    productRow.rowId(),
-                                    productRow.productName(),
-                                    keywordCategories.get(productRow.rowId())
-                            ))
-                            .toList()
+            List<KeywordDetailEntry> keywordDetails = writeKeywordsAndResults(
+                    productRows,
+                    myCategoryResults,
+                    resolvedKeywordCount,
+                    sheetContext,
+                    includeSelectionDetails,
+                    progressCallback
             );
-            List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
-
-            for (ProductExcelRow productRow : productRows) {
-                Row row = productRow.row();
-                String productName = productRow.productName();
-                String category = productRow.category();
-                MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
-                        productRow.rowId(),
-                        MyCategoryMatchResult.noCategoryMatch()
-                );
-                String myCategory = resolveMyCategory(myCategoryResult);
-                String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
-                List<GeneratedKeyword> keywords = generateKeywords(
-                        productName,
-                        keywordCategory,
-                        repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
-                        resolvedKeywordCount
-                );
-
-                row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
-                        .map(keyword -> keyword.score().keyword())
-                        .collect(java.util.stream.Collectors.joining(", ")));
-                for (int index = 0; index < keywords.size(); index++) {
-                    GeneratedKeyword keyword = keywords.get(index);
-                    keywordDetails.add(new KeywordDetailEntry(
-                            productRow.rowId() + 1,
-                            productName,
-                            keywordCategory,
-                            index + 1,
-                            keyword.score(),
-                            keyword.reasons()
-                    ));
-                }
-                row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
-                writeNaverCategory(row, myCategoryResult);
-                if (includeSelectionDetails) {
-                    row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                    writeSimilarProducts(row, myCategoryResult, selectedStyle);
-                    writeSelectedCategory(row, myCategoryResult);
-                    writeLlmStatus(row, myCategoryResult, selectedStyle, rejectedStyle);
-                    writeCategoryEmbeddingCandidates(row, myCategoryResult, selectedStyle);
-                }
-            }
             if (includeSelectionDetails) {
                 writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             }
             keywordDetailSheetWriter.write(workbook, keywordDetails);
-            progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
 
             progressCallback.onProgress(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
@@ -282,7 +207,182 @@ public class ProductExcelProcessingService {
         return results;
     }
 
-    private record ProductExcelRow(int rowId, Row row, String productName, String category) {
+    private Map<Integer, MyCategoryMatchResult> matchCategories(
+            List<ProductExcelRow> productRows,
+            Long userId,
+            ProductExcelProgressCallback progressCallback
+    ) {
+        List<CategoryMatchProductRequest> products = productRows.stream()
+                .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
+                .toList();
+        long categoryStartedAt = System.nanoTime();
+        Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
+                products,
+                userId,
+                progressCallback
+        );
+        progressCallback.onCategoryCompleted(elapsedMillis(categoryStartedAt));
+        return myCategoryResults;
+    }
+
+    private List<KeywordDetailEntry> writeKeywordsAndResults(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults,
+            int resolvedKeywordCount,
+            ProductExcelSheetContext sheetContext,
+            boolean includeSelectionDetails,
+            ProductExcelProgressCallback progressCallback
+    ) {
+        long keywordStartedAt = System.nanoTime();
+        Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
+        Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
+                productRows.stream()
+                        .map(productRow -> new ProductSource(
+                                productRow.rowId(),
+                                productRow.productName(),
+                                keywordCategories.get(productRow.rowId())
+                        ))
+                        .toList()
+        );
+        List<KeywordDetailEntry> keywordDetails = writeProductResultRows(
+                productRows,
+                myCategoryResults,
+                keywordCategories,
+                repeatedPhrases,
+                resolvedKeywordCount,
+                sheetContext,
+                includeSelectionDetails
+        );
+        progressCallback.onKeywordCompleted(elapsedMillis(keywordStartedAt));
+        return keywordDetails;
+    }
+
+    private ProductExcelSheetContext prepareSheet(
+            Workbook workbook,
+            Sheet sheet,
+            Row headerRow,
+            String productNameColumn,
+            String categoryColumn,
+            boolean includeSelectionDetails
+    ) {
+        CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
+        CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
+
+        int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
+        int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
+        ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
+        ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
+        ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
+        if (includeSelectionDetails) {
+            ensureTopNaverCategoryHeaders(headerRow);
+            applyTopNaverCategoryColumnWidths(sheet);
+        } else {
+            hideSelectionDetailColumns(sheet);
+        }
+
+        return new ProductExcelSheetContext(
+                productNameColumnIndex,
+                categoryColumnIndex,
+                selectedStyle,
+                rejectedStyle
+        );
+    }
+
+    private List<ProductExcelRow> readProductRows(
+            Sheet sheet,
+            ProductExcelSheetContext sheetContext,
+            DataFormatter formatter
+    ) {
+        List<ProductExcelRow> productRows = new ArrayList<>();
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+
+            String productName = readCell(row, sheetContext.productNameColumnIndex(), formatter);
+            String category = sheetContext.categoryColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.categoryColumnIndex(), formatter);
+            if (productName.isBlank()) {
+                continue;
+            }
+
+            productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
+        }
+        return productRows;
+    }
+
+    private List<KeywordDetailEntry> writeProductResultRows(
+            List<ProductExcelRow> productRows,
+            Map<Integer, MyCategoryMatchResult> myCategoryResults,
+            Map<Integer, String> keywordCategories,
+            Map<Integer, List<String>> repeatedPhrases,
+            int resolvedKeywordCount,
+            ProductExcelSheetContext sheetContext,
+            boolean includeSelectionDetails
+    ) {
+        List<KeywordDetailEntry> keywordDetails = new ArrayList<>();
+
+        for (ProductExcelRow productRow : productRows) {
+            Row row = productRow.row();
+            String productName = productRow.productName();
+            String category = productRow.category();
+            MyCategoryMatchResult myCategoryResult = myCategoryResults.getOrDefault(
+                    productRow.rowId(),
+                    MyCategoryMatchResult.noCategoryMatch()
+            );
+            String myCategory = resolveMyCategory(myCategoryResult);
+            String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
+            List<GeneratedKeyword> keywords = generateKeywords(
+                    productName,
+                    keywordCategory,
+                    repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
+                    resolvedKeywordCount
+            );
+
+            row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
+                    .map(keyword -> keyword.score().keyword())
+                    .collect(java.util.stream.Collectors.joining(", ")));
+            for (int index = 0; index < keywords.size(); index++) {
+                GeneratedKeyword keyword = keywords.get(index);
+                keywordDetails.add(new KeywordDetailEntry(
+                        productRow.rowId() + 1,
+                        productName,
+                        keywordCategory,
+                        index + 1,
+                        keyword.score(),
+                        keyword.reasons()
+                ));
+            }
+            row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
+            writeNaverCategory(row, myCategoryResult);
+            if (includeSelectionDetails) {
+                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
+                writeSimilarProducts(row, myCategoryResult, sheetContext.selectedStyle());
+                writeSelectedCategory(row, myCategoryResult);
+                writeLlmStatus(row, myCategoryResult, sheetContext.selectedStyle(), sheetContext.rejectedStyle());
+                writeCategoryEmbeddingCandidates(row, myCategoryResult, sheetContext.selectedStyle());
+            }
+        }
+
+        return keywordDetails;
+    }
+
+    private record ProductExcelSheetContext(
+            int productNameColumnIndex,
+            int categoryColumnIndex,
+            CellStyle selectedStyle,
+            CellStyle rejectedStyle
+    ) {
+    }
+
+    private record ProductExcelRow(
+            int rowId,
+            Row row,
+            String productName,
+            String category
+    ) {
     }
 
     private long elapsedMillis(long startedAtNanos) {
@@ -310,50 +410,88 @@ public class ProductExcelProcessingService {
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
-            }
+            ProductImageDownloadSheetContext sheetContext = prepareImageDownloadSheet(sheet);
+            ProductImageDownloadRows rows = readImageDownloadRows(sheet, sheetContext);
 
-            int imageUrlColumnIndex = findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN);
-            int productCodeColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN);
-            int productNumberColumnIndex = findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN);
-
-            Set<String> entryNames = new LinkedHashSet<>();
-            List<ProductImageDownloadItem> images = new ArrayList<>();
-            List<ProductImageDownloadFailure> failures = new ArrayList<>();
-            DataFormatter formatter = new DataFormatter(Locale.KOREA);
-
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                String imageUrl = normalizeImageUrl(readCell(row, imageUrlColumnIndex, formatter));
-                String productCode = productCodeColumnIndex < 0 ? "" : readCell(row, productCodeColumnIndex, formatter);
-                String productNumber = productNumberColumnIndex < 0 ? "" : readCell(row, productNumberColumnIndex, formatter);
-                String filenameBase = !productNumber.isBlank() ? productNumber : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
-                if (!isHttpUrl(imageUrl)) {
-                    failures.add(new ProductImageDownloadFailure(
-                            rowIndex + 1,
-                            filenameBase,
-                            imageUrl,
-                            "이미지 URL이 비어 있거나 올바르지 않습니다."
-                    ));
-                    continue;
-                }
-
-                String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
-                images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
-            }
-
-            return new ProductImageDownloadPrepareResponse(images.size(), failures.size(), images, failures);
+            return new ProductImageDownloadPrepareResponse(
+                    rows.images().size(),
+                    rows.failures().size(),
+                    rows.images(),
+                    rows.failures()
+            );
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to read image download targets.");
         }
+    }
+
+    private ProductImageDownloadSheetContext prepareImageDownloadSheet(Sheet sheet) {
+        Row headerRow = sheet.getRow(0);
+        if (headerRow == null) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Excel header row is empty.");
+        }
+
+        return new ProductImageDownloadSheetContext(
+                findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN),
+                findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN),
+                findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN)
+        );
+    }
+
+    private ProductImageDownloadRows readImageDownloadRows(
+            Sheet sheet,
+            ProductImageDownloadSheetContext sheetContext
+    ) {
+        Set<String> entryNames = new LinkedHashSet<>();
+        List<ProductImageDownloadItem> images = new ArrayList<>();
+        List<ProductImageDownloadFailure> failures = new ArrayList<>();
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+
+            String imageUrl = normalizeImageUrl(readCell(row, sheetContext.imageUrlColumnIndex(), formatter));
+            String productCode = sheetContext.productCodeColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.productCodeColumnIndex(), formatter);
+            String productNumber = sheetContext.productNumberColumnIndex() < 0
+                    ? ""
+                    : readCell(row, sheetContext.productNumberColumnIndex(), formatter);
+            String filenameBase = !productNumber.isBlank()
+                    ? productNumber
+                    : (!productCode.isBlank() ? productCode : "row_" + (rowIndex + 1));
+            if (!isHttpUrl(imageUrl)) {
+                failures.add(new ProductImageDownloadFailure(
+                        rowIndex + 1,
+                        filenameBase,
+                        imageUrl,
+                        "이미지 URL이 비어 있거나 올바르지 않습니다."
+                ));
+                continue;
+            }
+
+            String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
+            images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
+        }
+
+        return new ProductImageDownloadRows(images, failures);
+    }
+
+    private record ProductImageDownloadSheetContext(
+            int imageUrlColumnIndex,
+            int productCodeColumnIndex,
+            int productNumberColumnIndex
+    ) {
+    }
+
+    private record ProductImageDownloadRows(
+            List<ProductImageDownloadItem> images,
+            List<ProductImageDownloadFailure> failures
+    ) {
     }
 
     public byte[] downloadImage(String imageUrl) {
@@ -778,7 +916,10 @@ public class ProductExcelProcessingService {
         return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
-    private record GeneratedKeyword(ScoredKeyword score, List<String> reasons) {
+    private record GeneratedKeyword(
+            ScoredKeyword score,
+            List<String> reasons
+    ) {
     }
 
     private String imageExtension(String imageUrl) {
