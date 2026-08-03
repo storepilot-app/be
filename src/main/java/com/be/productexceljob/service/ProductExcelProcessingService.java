@@ -26,6 +26,11 @@ import com.be.keyword.KeywordSynonymDictionary.SynonymExpansion;
 import com.be.keyword.ProductNameTokenExtractor;
 import com.be.keyword.SimilarProductRepeatedPhraseExtractor;
 import com.be.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import javax.imageio.ImageIO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -64,6 +70,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class ProductExcelProcessingService {
+    private static final int PRODUCT_IMAGE_SIZE = 1000;
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
@@ -500,7 +507,7 @@ public class ProductExcelProcessingService {
         }
 
         try {
-            return fetchImage(imageUrl);
+            return resizeImageToSquare(fetchImage(imageUrl), imageUrl);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, e.getMessage());
         } catch (InterruptedException e) {
@@ -520,6 +527,51 @@ public class ProductExcelProcessingService {
             throw new IOException("Image request failed with status " + response.statusCode());
         }
         return response.body();
+    }
+
+    private byte[] resizeImageToSquare(byte[] imageBytes, String imageUrl) throws IOException {
+        BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
+        if (sourceImage == null) {
+            throw new IOException("지원하지 않는 이미지 형식입니다.");
+        }
+
+        String extension = imageExtension(imageUrl);
+        boolean png = ".png".equals(extension);
+        BufferedImage resizedImage = new BufferedImage(
+                PRODUCT_IMAGE_SIZE,
+                PRODUCT_IMAGE_SIZE,
+                png ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB
+        );
+
+        Graphics2D graphics = resizedImage.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            if (!png) {
+                graphics.setColor(Color.WHITE);
+                graphics.fillRect(0, 0, PRODUCT_IMAGE_SIZE, PRODUCT_IMAGE_SIZE);
+            }
+
+            double scale = Math.min(
+                    PRODUCT_IMAGE_SIZE / (double) sourceImage.getWidth(),
+                    PRODUCT_IMAGE_SIZE / (double) sourceImage.getHeight()
+            );
+            int width = Math.max(1, (int) Math.round(sourceImage.getWidth() * scale));
+            int height = Math.max(1, (int) Math.round(sourceImage.getHeight() * scale));
+            int x = (PRODUCT_IMAGE_SIZE - width) / 2;
+            int y = (PRODUCT_IMAGE_SIZE - height) / 2;
+            graphics.drawImage(sourceImage, x, y, width, height, null);
+        } finally {
+            graphics.dispose();
+        }
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        String formatName = png ? "png" : "jpg";
+        if (!ImageIO.write(resizedImage, formatName, outputStream)) {
+            throw new IOException("이미지 리사이즈 결과를 생성하지 못했습니다.");
+        }
+        return outputStream.toByteArray();
     }
 
     private int findRequiredColumnIndex(Row headerRow, String columnName) {
@@ -928,7 +980,7 @@ public class ProductExcelProcessingService {
             int dotIndex = path.lastIndexOf('.');
             if (dotIndex >= 0) {
                 String extension = path.substring(dotIndex).toLowerCase(Locale.ROOT);
-                if (extension.matches("\\.(jpg|jpeg|png|webp|gif)")) {
+                if (extension.matches("\\.(jpg|jpeg|png)")) {
                     return extension;
                 }
             }
