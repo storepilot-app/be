@@ -7,6 +7,7 @@ import com.be.global.exception.ErrorCode;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
+import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.service.TrainingProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,6 +45,19 @@ public class TrainingProductController {
         requireAdmin(loginUser);
         ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
         return CommonResponse.success(response, response.message());
+    }
+
+    @Operation(
+            summary = "기존 상품 네이버 카테고리별 개수 조회",
+            description = "최근 기존 상품 인덱스 재생성 시 저장된 네이버 카테고리별 기존 상품 개수를 조회합니다."
+    )
+    @GetMapping("/category-stats")
+    public CommonResponse<ProductCategoryStatsResponse> categoryStats(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        requireAdmin(loginUser);
+        ProductCategoryStatsResponse response = trainingProductService.getCategoryStats(loginUser.id());
+        return CommonResponse.success(response, "기존 상품 카테고리 통계를 조회했습니다.");
     }
 
     @Operation(
