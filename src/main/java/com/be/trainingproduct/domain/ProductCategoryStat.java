@@ -88,4 +88,8 @@ public class ProductCategoryStat {
         this.productCount = Math.max(0, this.productCount - 1);
         this.updatedAt = updatedAt;
     }
+
+    public void touch(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

@@ -48,13 +48,18 @@ public class ProductCategoryStatService {
 
     @Transactional
     public void moveStat(Long userId, String previousNaverCategoryCode, MyCategoryMapping nextMapping) {
-        if (previousNaverCategoryCode == null
-                || previousNaverCategoryCode.isBlank()
-                || previousNaverCategoryCode.equals(nextMapping.getNaverCategoryCode())) {
+        if (previousNaverCategoryCode == null || previousNaverCategoryCode.isBlank()) {
             return;
         }
 
         Instant updatedAt = Instant.now();
+        if (previousNaverCategoryCode.equals(nextMapping.getNaverCategoryCode())) {
+            productCategoryStatRepository
+                    .findFirstByUserIdAndNaverCategoryCode(userId, previousNaverCategoryCode)
+                    .ifPresent(stat -> stat.touch(updatedAt));
+            return;
+        }
+
         productCategoryStatRepository
                 .findFirstByUserIdAndNaverCategoryCode(userId, previousNaverCategoryCode)
                 .ifPresent(stat -> stat.decreaseProductCount(updatedAt));

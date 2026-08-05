@@ -17,7 +17,7 @@ public record ProductCategoryStatsResponse(
                 .sum();
         Instant updatedAt = stats.stream()
                 .map(ProductCategoryStat::getUpdatedAt)
-                .findFirst()
+                .max(Instant::compareTo)
                 .orElse(null);
 
         return new ProductCategoryStatsResponse(
