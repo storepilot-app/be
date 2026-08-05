@@ -218,12 +218,13 @@ public class TrainingProductService {
             mappingsByMyCategory.put(mapping.getMyCategoryCode(), mapping);
         }
 
-        Map<String, CategoryCount> countsByCategoryCode = new HashMap<>();
+        Map<String, Map<String, MyCategoryMapping>> mappingsByProductName = new HashMap<>();
         DataFormatter formatter = new DataFormatter(Locale.KOREA);
         for (MultipartFile file : files) {
-            collectCategoryStats(file, mappingsByMyCategory, countsByCategoryCode, formatter);
+            collectCategoryStats(file, mappingsByMyCategory, mappingsByProductName, formatter);
         }
 
+        Map<String, CategoryCount> countsByCategoryCode = countCategories(mappingsByProductName);
         Instant updatedAt = Instant.now();
         return countsByCategoryCode.values()
                 .stream()
@@ -245,7 +246,7 @@ public class TrainingProductService {
     private void collectCategoryStats(
             MultipartFile file,
             Map<String, MyCategoryMapping> mappingsByMyCategory,
-            Map<String, CategoryCount> countsByCategoryCode,
+            Map<String, Map<String, MyCategoryMapping>> mappingsByProductName,
             DataFormatter formatter
     ) {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
@@ -261,19 +262,38 @@ public class TrainingProductService {
                     continue;
                 }
 
+                String normalizedProductName = normalizeProductName(productName);
+                if (normalizedProductName.isBlank()) {
+                    continue;
+                }
+
                 String myCategoryCode = formatter.formatCellValue(row.getCell(MY_CATEGORY_COLUMN_INDEX)).trim();
                 MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
                 if (mapping == null) {
                     continue;
                 }
 
-                countsByCategoryCode
-                        .computeIfAbsent(mapping.getNaverCategoryCode(), ignored -> CategoryCount.from(mapping))
-                        .increment();
+                mappingsByProductName
+                        .computeIfAbsent(normalizedProductName, ignored -> new HashMap<>())
+                        .putIfAbsent(mapping.getNaverCategoryCode(), mapping);
             }
         } catch (IOException e) {
             throw invalid("기존 상품 엑셀 파일을 읽지 못했습니다.");
         }
+    }
+
+    private Map<String, CategoryCount> countCategories(
+            Map<String, Map<String, MyCategoryMapping>> mappingsByProductName
+    ) {
+        Map<String, CategoryCount> countsByCategoryCode = new HashMap<>();
+        for (Map<String, MyCategoryMapping> mappingsByCategory : mappingsByProductName.values()) {
+            for (MyCategoryMapping mapping : mappingsByCategory.values()) {
+                countsByCategoryCode
+                        .computeIfAbsent(mapping.getNaverCategoryCode(), ignored -> CategoryCount.from(mapping))
+                        .increment();
+            }
+        }
+        return countsByCategoryCode;
     }
 
     private void validateFiles(List<MultipartFile> files) {
