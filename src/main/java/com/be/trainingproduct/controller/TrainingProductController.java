@@ -8,6 +8,7 @@ import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
+import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.service.TrainingProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +45,21 @@ public class TrainingProductController {
     ) {
         requireAdmin(loginUser);
         ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
+        return CommonResponse.success(response, response.message());
+    }
+
+    @Operation(
+            summary = "기존 상품 인덱스에 상품 추가",
+            description = "엑셀 D열의 상품명과 T열의 마이카테고리 코드를 읽어 기존 상품 인덱스에 상품을 추가합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+    )
+    @PostMapping(value = "/append", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CommonResponse<ProductIndexAppendResponse> append(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @Parameter(description = "추가할 기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        requireAdmin(loginUser);
+        ProductIndexAppendResponse response = trainingProductService.appendProducts(loginUser.id(), files);
         return CommonResponse.success(response, response.message());
     }
 

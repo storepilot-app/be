@@ -13,6 +13,7 @@ import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
+import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.io.IOException;
@@ -64,6 +65,48 @@ public class TrainingProductService {
         return productCategoryStatService.getStats(userId);
     }
 
+    public ProductIndexAppendResponse appendProducts(Long userId, List<MultipartFile> files) {
+        validateUserId(userId);
+        validateFiles(files);
+        List<MyCategoryMapping> resolvedMappings = myCategoryMappingQueryService.getResolvedMappings(userId);
+        if (resolvedMappings.isEmpty()) {
+            throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
+        }
+
+        ProductAppendRows rows = collectProductAppendRows(files, resolvedMappings);
+        if (rows.candidates().isEmpty()) {
+            throw invalid("기존 상품 인덱스에 추가할 수 있는 유효 상품 행이 없습니다.");
+        }
+
+        int indexedProductCount = 0;
+        for (ProductAppendCandidate candidate : rows.candidates()) {
+            ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
+                    userId,
+                    candidate.productName(),
+                    candidate.mapping().getMyCategoryCode(),
+                    candidate.mapping().getNaverCategoryId(),
+                    candidate.mapping().getNaverCategoryCode(),
+                    candidate.mapping().getNaverCategoryFullPath(),
+                    Instant.now()
+            ));
+            ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
+                    ProductFeedbackAiRequest.from(feedback)
+            );
+            productCategoryStatService.increaseStat(userId, candidate.mapping());
+            indexedProductCount = aiResponse.indexedProductCount();
+        }
+
+        return new ProductIndexAppendResponse(
+                files.size(),
+                rows.sourceRowCount(),
+                rows.candidates().size(),
+                rows.unmappedRowCount(),
+                rows.candidates().size(),
+                indexedProductCount,
+                "기존 상품 인덱스에 상품을 추가했습니다."
+        );
+    }
+
     @Transactional
     public ProductCategoryFeedbackResponse addFeedback(Long userId, ProductCategoryFeedbackRequest request) {
         if (request == null) {
@@ -87,7 +130,54 @@ public class TrainingProductService {
         ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
                 ProductFeedbackAiRequest.from(feedback)
         );
+        productCategoryStatService.increaseStat(userId, mapping);
         return ProductCategoryFeedbackResponse.from(feedback, aiResponse);
+    }
+
+    private ProductAppendRows collectProductAppendRows(
+            List<MultipartFile> files,
+            List<MyCategoryMapping> resolvedMappings
+    ) {
+        Map<String, MyCategoryMapping> mappingsByMyCategory = new HashMap<>();
+        for (MyCategoryMapping mapping : resolvedMappings) {
+            mappingsByMyCategory.put(mapping.getMyCategoryCode(), mapping);
+        }
+
+        List<ProductAppendCandidate> candidates = new java.util.ArrayList<>();
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+        int sourceRowCount = 0;
+        int unmappedRowCount = 0;
+
+        for (MultipartFile file : files) {
+            try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+                Sheet sheet = workbook.getSheetAt(0);
+                for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                    Row row = sheet.getRow(rowIndex);
+                    if (row == null) {
+                        continue;
+                    }
+
+                    String productName = formatter.formatCellValue(row.getCell(PRODUCT_NAME_COLUMN_INDEX)).trim();
+                    if (productName.isBlank()) {
+                        continue;
+                    }
+                    sourceRowCount++;
+
+                    String myCategoryCode = formatter.formatCellValue(row.getCell(MY_CATEGORY_COLUMN_INDEX)).trim();
+                    MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
+                    if (mapping == null) {
+                        unmappedRowCount++;
+                        continue;
+                    }
+
+                    candidates.add(new ProductAppendCandidate(productName, mapping));
+                }
+            } catch (IOException e) {
+                throw invalid("기존 상품 엑셀 파일을 읽지 못했습니다.");
+            }
+        }
+
+        return new ProductAppendRows(sourceRowCount, unmappedRowCount, candidates);
     }
 
     private List<ProductCategoryStat> collectCategoryStats(
@@ -240,5 +330,18 @@ public class TrainingProductService {
         private long productCount() {
             return productCount;
         }
+    }
+
+    private record ProductAppendRows(
+            int sourceRowCount,
+            int unmappedRowCount,
+            List<ProductAppendCandidate> candidates
+    ) {
+    }
+
+    private record ProductAppendCandidate(
+            String productName,
+            MyCategoryMapping mapping
+    ) {
     }
 }

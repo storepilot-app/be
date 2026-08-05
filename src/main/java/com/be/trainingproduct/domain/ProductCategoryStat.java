@@ -78,4 +78,9 @@ public class ProductCategoryStat {
                 updatedAt
         );
     }
+
+    public void increaseProductCount(Instant updatedAt) {
+        this.productCount++;
+        this.updatedAt = updatedAt;
+    }
 }

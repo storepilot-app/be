@@ -1,8 +1,10 @@
 package com.be.trainingproduct.service;
 
+import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.trainingproduct.domain.ProductCategoryStat;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.be.trainingproduct.repository.ProductCategoryStatRepository;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,5 +26,23 @@ public class ProductCategoryStatService {
     public void replaceStats(Long userId, List<ProductCategoryStat> stats) {
         productCategoryStatRepository.deleteByUserId(userId);
         productCategoryStatRepository.saveAll(stats);
+    }
+
+    @Transactional
+    public void increaseStat(Long userId, MyCategoryMapping mapping) {
+        Instant updatedAt = Instant.now();
+        productCategoryStatRepository
+                .findFirstByUserIdAndNaverCategoryCode(userId, mapping.getNaverCategoryCode())
+                .ifPresentOrElse(
+                        stat -> stat.increaseProductCount(updatedAt),
+                        () -> productCategoryStatRepository.save(ProductCategoryStat.create(
+                                userId,
+                                mapping.getNaverCategoryId(),
+                                mapping.getNaverCategoryCode(),
+                                mapping.getNaverCategoryFullPath(),
+                                1,
+                                updatedAt
+                        ))
+                );
     }
 }
