@@ -35,7 +35,7 @@ public class TrainingProductController {
 
     @Operation(
             summary = "기존 상품 FAISS 인덱스 재생성",
-            description = "엑셀 D열의 상품명과 T열의 마이카테고리 코드를 읽어 공용 FAISS 상품 인덱스를 재생성합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 공용 FAISS 상품 인덱스를 재생성합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
     )
     @PostMapping(value = "/rebuild", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexRebuildResponse> rebuild(
@@ -50,7 +50,7 @@ public class TrainingProductController {
 
     @Operation(
             summary = "기존 상품 인덱스에 상품 추가",
-            description = "엑셀 D열의 상품명과 T열의 마이카테고리 코드를 읽어 기존 상품 인덱스에 상품을 추가합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 기존 상품 인덱스에 상품을 추가합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
     )
     @PostMapping(value = "/append", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexAppendResponse> append(

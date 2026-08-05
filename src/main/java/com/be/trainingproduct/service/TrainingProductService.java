@@ -36,8 +36,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class TrainingProductService {
-    private static final int PRODUCT_NAME_COLUMN_INDEX = 3; // D
-    private static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
+    private static final List<String> PRODUCT_NAME_HEADERS = List.of("상품명");
+    private static final List<String> MY_CATEGORY_HEADERS = List.of("마이카테", "마이카테고리", "마이카테고리코드");
 
     private final TrainingProductAiClient trainingProductAiClient;
     private final MyCategoryMappingQueryService myCategoryMappingQueryService;
@@ -179,19 +179,20 @@ public class TrainingProductService {
         for (MultipartFile file : files) {
             try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
                 Sheet sheet = workbook.getSheetAt(0);
+                TrainingProductColumns columns = resolveColumns(sheet, formatter);
                 for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                     Row row = sheet.getRow(rowIndex);
                     if (row == null) {
                         continue;
                     }
 
-                    String productName = formatter.formatCellValue(row.getCell(PRODUCT_NAME_COLUMN_INDEX)).trim();
+                    String productName = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
                     if (productName.isBlank()) {
                         continue;
                     }
                     sourceRowCount++;
 
-                    String myCategoryCode = formatter.formatCellValue(row.getCell(MY_CATEGORY_COLUMN_INDEX)).trim();
+                    String myCategoryCode = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
                     MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
                     if (mapping == null) {
                         unmappedRowCount++;
@@ -251,13 +252,14 @@ public class TrainingProductService {
     ) {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
+            TrainingProductColumns columns = resolveColumns(sheet, formatter);
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
                 }
 
-                String productName = formatter.formatCellValue(row.getCell(PRODUCT_NAME_COLUMN_INDEX)).trim();
+                String productName = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
                 if (productName.isBlank()) {
                     continue;
                 }
@@ -267,7 +269,7 @@ public class TrainingProductService {
                     continue;
                 }
 
-                String myCategoryCode = formatter.formatCellValue(row.getCell(MY_CATEGORY_COLUMN_INDEX)).trim();
+                String myCategoryCode = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
                 MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
                 if (mapping == null) {
                     continue;
@@ -294,6 +296,37 @@ public class TrainingProductService {
             }
         }
         return countsByCategoryCode;
+    }
+
+    private TrainingProductColumns resolveColumns(Sheet sheet, DataFormatter formatter) {
+        Row headerRow = sheet.getRow(0);
+        if (headerRow == null) {
+            throw invalid("기존 상품 엑셀 파일의 헤더 행이 비어 있습니다.");
+        }
+
+        return new TrainingProductColumns(
+                findRequiredColumnIndex(headerRow, PRODUCT_NAME_HEADERS, "상품명", formatter),
+                findRequiredColumnIndex(headerRow, MY_CATEGORY_HEADERS, "마이카테고리", formatter)
+        );
+    }
+
+    private int findRequiredColumnIndex(
+            Row headerRow,
+            List<String> headers,
+            String displayName,
+            DataFormatter formatter
+    ) {
+        for (org.apache.poi.ss.usermodel.Cell cell : headerRow) {
+            String value = normalizeHeader(formatter.formatCellValue(cell));
+            if (headers.stream().map(this::normalizeHeader).anyMatch(value::equals)) {
+                return cell.getColumnIndex();
+            }
+        }
+        throw invalid("기존 상품 엑셀 파일에 필요한 헤더가 없습니다: " + displayName);
+    }
+
+    private String normalizeHeader(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
     private void validateFiles(List<MultipartFile> files) {
@@ -396,6 +429,12 @@ public class TrainingProductService {
     private record ProductAppendCandidate(
             String productName,
             MyCategoryMapping mapping
+    ) {
+    }
+
+    private record TrainingProductColumns(
+            int productNameColumnIndex,
+            int myCategoryColumnIndex
     ) {
     }
 }
