@@ -5,9 +5,9 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProductCategoryFeedbackRepository extends JpaRepository<ProductCategoryFeedback, Long> {
-    Optional<ProductCategoryFeedback> findFirstByUserIdAndNormalizedProductNameOrderByCreatedAtDesc(
+    Optional<ProductCategoryFeedback> findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(
             Long userId,
-            String normalizedProductName
+            String normalizedProductKey
     );
 
     void deleteByUserId(Long userId);

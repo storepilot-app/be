@@ -17,8 +17,12 @@ import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -83,13 +87,15 @@ public class TrainingProductService {
         int updatedProductCount = 0;
         for (ProductAppendCandidate candidate : rows.candidates()) {
             String normalizedProductName = normalizeProductName(candidate.productName());
+            String normalizedProductKey = normalizedProductKey(normalizedProductName);
             ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
-                    .findFirstByUserIdAndNormalizedProductNameOrderByCreatedAtDesc(userId, normalizedProductName)
+                    .findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(userId, normalizedProductKey)
                     .orElse(null);
             ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
                     userId,
                     candidate.productName(),
                     normalizedProductName,
+                    normalizedProductKey,
                     candidate.mapping().getMyCategoryCode(),
                     candidate.mapping().getNaverCategoryId(),
                     candidate.mapping().getNaverCategoryCode(),
@@ -137,14 +143,16 @@ public class TrainingProductService {
         MyCategoryMapping mapping = myCategoryMappingQueryService
                 .getRequiredResolvedMapping(userId, myCategoryCode);
         String normalizedProductName = normalizeProductName(productName);
+        String normalizedProductKey = normalizedProductKey(normalizedProductName);
         ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
-                .findFirstByUserIdAndNormalizedProductNameOrderByCreatedAtDesc(userId, normalizedProductName)
+                .findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(userId, normalizedProductKey)
                 .orElse(null);
 
         ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
                 userId,
                 productName,
                 normalizedProductName,
+                normalizedProductKey,
                 myCategoryCode,
                 mapping.getNaverCategoryId(),
                 mapping.getNaverCategoryCode(),
@@ -368,6 +376,16 @@ public class TrainingProductService {
         return productName == null
                 ? ""
                 : productName.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizedProductKey(String normalizedProductName) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(normalizedProductName.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available.", e);
+        }
     }
 
     private BusinessException invalid(String message) {

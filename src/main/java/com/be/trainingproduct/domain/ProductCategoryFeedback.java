@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
         indexes = {
                 @Index(name = "idx_product_feedback_user_created", columnList = "user_id, created_at"),
                 @Index(name = "idx_product_feedback_my_category", columnList = "user_id, my_category_code"),
-                @Index(name = "idx_product_feedback_user_normalized_title", columnList = "user_id, normalized_product_name")
+                @Index(name = "idx_product_feedback_user_normalized_key", columnList = "user_id, normalized_product_key")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -36,6 +36,9 @@ public class ProductCategoryFeedback {
 
     @Column(name = "normalized_product_name", length = 1000)
     private String normalizedProductName;
+
+    @Column(name = "normalized_product_key", length = 64)
+    private String normalizedProductKey;
 
     @Column(name = "my_category_code", nullable = false, length = 100)
     private String myCategoryCode;
@@ -56,6 +59,7 @@ public class ProductCategoryFeedback {
             Long userId,
             String productName,
             String normalizedProductName,
+            String normalizedProductKey,
             String myCategoryCode,
             Long naverCategoryId,
             String naverCategoryCode,
@@ -65,6 +69,7 @@ public class ProductCategoryFeedback {
         this.userId = userId;
         this.productName = productName;
         this.normalizedProductName = normalizedProductName;
+        this.normalizedProductKey = normalizedProductKey;
         this.myCategoryCode = myCategoryCode;
         this.naverCategoryId = naverCategoryId;
         this.naverCategoryCode = naverCategoryCode;
@@ -76,6 +81,7 @@ public class ProductCategoryFeedback {
             Long userId,
             String productName,
             String normalizedProductName,
+            String normalizedProductKey,
             String myCategoryCode,
             Long naverCategoryId,
             String naverCategoryCode,
@@ -86,6 +92,7 @@ public class ProductCategoryFeedback {
                 userId,
                 productName,
                 normalizedProductName,
+                normalizedProductKey,
                 myCategoryCode,
                 naverCategoryId,
                 naverCategoryCode,
