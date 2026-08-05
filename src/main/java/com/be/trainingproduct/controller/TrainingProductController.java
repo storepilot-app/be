@@ -7,6 +7,8 @@ import com.be.global.exception.ErrorCode;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
+import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
+import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.service.TrainingProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +18,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,7 +35,7 @@ public class TrainingProductController {
 
     @Operation(
             summary = "기존 상품 FAISS 인덱스 재생성",
-            description = "엑셀 D열의 상품명과 T열의 마이카테고리 코드를 읽어 공용 FAISS 상품 인덱스를 재생성합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 공용 FAISS 상품 인덱스를 재생성합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
     )
     @PostMapping(value = "/rebuild", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexRebuildResponse> rebuild(
@@ -43,6 +46,34 @@ public class TrainingProductController {
         requireAdmin(loginUser);
         ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
         return CommonResponse.success(response, response.message());
+    }
+
+    @Operation(
+            summary = "기존 상품 인덱스에 상품 추가",
+            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 기존 상품 인덱스에 상품을 추가합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+    )
+    @PostMapping(value = "/append", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CommonResponse<ProductIndexAppendResponse> append(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @Parameter(description = "추가할 기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        requireAdmin(loginUser);
+        ProductIndexAppendResponse response = trainingProductService.appendProducts(loginUser.id(), files);
+        return CommonResponse.success(response, response.message());
+    }
+
+    @Operation(
+            summary = "기존 상품 네이버 카테고리별 개수 조회",
+            description = "최근 기존 상품 인덱스 재생성 시 저장된 네이버 카테고리별 기존 상품 개수를 조회합니다."
+    )
+    @GetMapping("/category-stats")
+    public CommonResponse<ProductCategoryStatsResponse> categoryStats(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        requireAdmin(loginUser);
+        ProductCategoryStatsResponse response = trainingProductService.getCategoryStats(loginUser.id());
+        return CommonResponse.success(response, "기존 상품 카테고리 통계를 조회했습니다.");
     }
 
     @Operation(
