@@ -4,6 +4,7 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.global.config.properties.AiServerProperties;
 import com.be.trainingproduct.dto.CategoryMatchMappingItem;
+import com.be.trainingproduct.dto.ProductFeedbackBatchAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
@@ -84,6 +85,39 @@ public class TrainingProductAiClient {
         try {
             byte[] responseBody = restClient().post()
                     .uri("/ai/categories/product-index/feedback")
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .exchange((httpRequest, response) -> readResponseBytes(response));
+            ProductFeedbackAiResponse response = readJsonResponse(responseBody, ProductFeedbackAiResponse.class);
+            if (response == null) {
+                throw new BusinessException(
+                        ErrorCode.CATEGORY_MATCHING_FAILED,
+                        "AI 서버에서 피드백 처리 결과를 받지 못했습니다."
+                );
+            }
+            return response;
+        } catch (RestClientResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeResponse(error)
+            );
+        } catch (AiServerResponseException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeAiServerResponse(error)
+            );
+        } catch (RestClientException error) {
+            throw new BusinessException(
+                    ErrorCode.CATEGORY_MATCHING_FAILED,
+                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeMessage(error)
+            );
+        }
+    }
+
+    public ProductFeedbackAiResponse addProductFeedbacks(ProductFeedbackBatchAiRequest request) {
+        try {
+            byte[] responseBody = restClient().post()
+                    .uri("/ai/categories/product-index/feedback/batch")
                     .accept(MediaType.APPLICATION_JSON)
                     .body(request)
                     .exchange((httpRequest, response) -> readResponseBytes(response));

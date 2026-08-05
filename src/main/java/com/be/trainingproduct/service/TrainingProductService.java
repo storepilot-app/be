@@ -11,6 +11,7 @@ import com.be.trainingproduct.dto.CategoryMatchMappingItem;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
+import com.be.trainingproduct.dto.ProductFeedbackBatchAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexAppendResponse;
@@ -23,6 +24,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -85,6 +87,7 @@ public class TrainingProductService {
         int indexedProductCount = 0;
         int insertedProductCount = 0;
         int updatedProductCount = 0;
+        List<ProductFeedbackAiRequest> aiRequests = new ArrayList<>();
         for (ProductAppendCandidate candidate : rows.candidates()) {
             String normalizedProductName = normalizeProductName(candidate.productName());
             String normalizedProductKey = normalizedProductKey(normalizedProductName);
@@ -102,9 +105,7 @@ public class TrainingProductService {
                     candidate.mapping().getNaverCategoryFullPath(),
                     Instant.now()
             ));
-            ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
-                    ProductFeedbackAiRequest.from(feedback)
-            );
+            aiRequests.add(ProductFeedbackAiRequest.from(feedback));
             if (previousFeedback == null) {
                 productCategoryStatService.increaseStat(userId, candidate.mapping());
                 insertedProductCount++;
@@ -116,8 +117,11 @@ public class TrainingProductService {
                 );
                 updatedProductCount++;
             }
-            indexedProductCount = aiResponse.indexedProductCount();
         }
+        ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedbacks(
+                new ProductFeedbackBatchAiRequest(userId, aiRequests)
+        );
+        indexedProductCount = aiResponse.indexedProductCount();
 
         return new ProductIndexAppendResponse(
                 files.size(),
@@ -179,7 +183,7 @@ public class TrainingProductService {
             mappingsByMyCategory.put(mapping.getMyCategoryCode(), mapping);
         }
 
-        List<ProductAppendCandidate> candidates = new java.util.ArrayList<>();
+        List<ProductAppendCandidate> candidates = new ArrayList<>();
         DataFormatter formatter = new DataFormatter(Locale.KOREA);
         int sourceRowCount = 0;
         int unmappedRowCount = 0;
