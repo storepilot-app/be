@@ -45,4 +45,19 @@ public class ProductCategoryStatService {
                         ))
                 );
     }
+
+    @Transactional
+    public void moveStat(Long userId, String previousNaverCategoryCode, MyCategoryMapping nextMapping) {
+        if (previousNaverCategoryCode == null
+                || previousNaverCategoryCode.isBlank()
+                || previousNaverCategoryCode.equals(nextMapping.getNaverCategoryCode())) {
+            return;
+        }
+
+        Instant updatedAt = Instant.now();
+        productCategoryStatRepository
+                .findFirstByUserIdAndNaverCategoryCode(userId, previousNaverCategoryCode)
+                .ifPresent(stat -> stat.decreaseProductCount(updatedAt));
+        increaseStat(userId, nextMapping);
+    }
 }

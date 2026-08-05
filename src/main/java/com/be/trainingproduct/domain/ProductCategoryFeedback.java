@@ -18,7 +18,8 @@ import lombok.NoArgsConstructor;
         name = "product_category_feedback",
         indexes = {
                 @Index(name = "idx_product_feedback_user_created", columnList = "user_id, created_at"),
-                @Index(name = "idx_product_feedback_my_category", columnList = "user_id, my_category_code")
+                @Index(name = "idx_product_feedback_my_category", columnList = "user_id, my_category_code"),
+                @Index(name = "idx_product_feedback_user_normalized_title", columnList = "user_id, normalized_product_name")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -32,6 +33,9 @@ public class ProductCategoryFeedback {
 
     @Column(name = "product_name", nullable = false, length = 1000)
     private String productName;
+
+    @Column(name = "normalized_product_name", length = 1000)
+    private String normalizedProductName;
 
     @Column(name = "my_category_code", nullable = false, length = 100)
     private String myCategoryCode;
@@ -51,6 +55,7 @@ public class ProductCategoryFeedback {
     private ProductCategoryFeedback(
             Long userId,
             String productName,
+            String normalizedProductName,
             String myCategoryCode,
             Long naverCategoryId,
             String naverCategoryCode,
@@ -59,6 +64,7 @@ public class ProductCategoryFeedback {
     ) {
         this.userId = userId;
         this.productName = productName;
+        this.normalizedProductName = normalizedProductName;
         this.myCategoryCode = myCategoryCode;
         this.naverCategoryId = naverCategoryId;
         this.naverCategoryCode = naverCategoryCode;
@@ -69,6 +75,7 @@ public class ProductCategoryFeedback {
     public static ProductCategoryFeedback create(
             Long userId,
             String productName,
+            String normalizedProductName,
             String myCategoryCode,
             Long naverCategoryId,
             String naverCategoryCode,
@@ -78,6 +85,7 @@ public class ProductCategoryFeedback {
         return new ProductCategoryFeedback(
                 userId,
                 productName,
+                normalizedProductName,
                 myCategoryCode,
                 naverCategoryId,
                 naverCategoryCode,

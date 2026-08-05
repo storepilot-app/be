@@ -83,4 +83,9 @@ public class ProductCategoryStat {
         this.productCount++;
         this.updatedAt = updatedAt;
     }
+
+    public void decreaseProductCount(Instant updatedAt) {
+        this.productCount = Math.max(0, this.productCount - 1);
+        this.updatedAt = updatedAt;
+    }
 }

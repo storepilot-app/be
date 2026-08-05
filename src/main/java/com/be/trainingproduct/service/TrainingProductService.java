@@ -79,10 +79,17 @@ public class TrainingProductService {
         }
 
         int indexedProductCount = 0;
+        int insertedProductCount = 0;
+        int updatedProductCount = 0;
         for (ProductAppendCandidate candidate : rows.candidates()) {
+            String normalizedProductName = normalizeProductName(candidate.productName());
+            ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
+                    .findFirstByUserIdAndNormalizedProductNameOrderByCreatedAtDesc(userId, normalizedProductName)
+                    .orElse(null);
             ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
                     userId,
                     candidate.productName(),
+                    normalizedProductName,
                     candidate.mapping().getMyCategoryCode(),
                     candidate.mapping().getNaverCategoryId(),
                     candidate.mapping().getNaverCategoryCode(),
@@ -92,7 +99,17 @@ public class TrainingProductService {
             ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
                     ProductFeedbackAiRequest.from(feedback)
             );
-            productCategoryStatService.increaseStat(userId, candidate.mapping());
+            if (previousFeedback == null) {
+                productCategoryStatService.increaseStat(userId, candidate.mapping());
+                insertedProductCount++;
+            } else {
+                productCategoryStatService.moveStat(
+                        userId,
+                        previousFeedback.getNaverCategoryCode(),
+                        candidate.mapping()
+                );
+                updatedProductCount++;
+            }
             indexedProductCount = aiResponse.indexedProductCount();
         }
 
@@ -102,6 +119,8 @@ public class TrainingProductService {
                 rows.candidates().size(),
                 rows.unmappedRowCount(),
                 rows.candidates().size(),
+                insertedProductCount,
+                updatedProductCount,
                 indexedProductCount,
                 "기존 상품 인덱스에 상품을 추가했습니다."
         );
@@ -117,10 +136,15 @@ public class TrainingProductService {
         String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
         MyCategoryMapping mapping = myCategoryMappingQueryService
                 .getRequiredResolvedMapping(userId, myCategoryCode);
+        String normalizedProductName = normalizeProductName(productName);
+        ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
+                .findFirstByUserIdAndNormalizedProductNameOrderByCreatedAtDesc(userId, normalizedProductName)
+                .orElse(null);
 
         ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
                 userId,
                 productName,
+                normalizedProductName,
                 myCategoryCode,
                 mapping.getNaverCategoryId(),
                 mapping.getNaverCategoryCode(),
@@ -130,7 +154,11 @@ public class TrainingProductService {
         ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
                 ProductFeedbackAiRequest.from(feedback)
         );
-        productCategoryStatService.increaseStat(userId, mapping);
+        if (previousFeedback == null) {
+            productCategoryStatService.increaseStat(userId, mapping);
+        } else {
+            productCategoryStatService.moveStat(userId, previousFeedback.getNaverCategoryCode(), mapping);
+        }
         return ProductCategoryFeedbackResponse.from(feedback, aiResponse);
     }
 
@@ -281,6 +309,12 @@ public class TrainingProductService {
             throw invalid(message);
         }
         return value.trim();
+    }
+
+    private String normalizeProductName(String productName) {
+        return productName == null
+                ? ""
+                : productName.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
     private BusinessException invalid(String message) {
