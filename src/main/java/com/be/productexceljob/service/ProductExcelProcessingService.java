@@ -350,7 +350,8 @@ public class ProductExcelProcessingService {
 
             row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
                     .map(keyword -> keyword.score().keyword())
-                    .collect(java.util.stream.Collectors.joining(", ")));
+                    .map(this::removeKeywordSpaces)
+                    .collect(java.util.stream.Collectors.joining(",")));
             for (int index = 0; index < keywords.size(); index++) {
                 GeneratedKeyword keyword = keywords.get(index);
                 keywordDetails.add(new KeywordDetailEntry(
@@ -966,6 +967,10 @@ public class ProductExcelProcessingService {
 
     private String normalizeKeyword(String value) {
         return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private String removeKeywordSpaces(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "");
     }
 
     private record GeneratedKeyword(
