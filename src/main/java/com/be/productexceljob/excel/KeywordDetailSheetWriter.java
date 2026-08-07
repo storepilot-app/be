@@ -63,7 +63,7 @@ public class KeywordDetailSheetWriter {
         row.createCell(0).setCellValue(entry.sourceRow());
         row.createCell(1).setCellValue(entry.productName());
         row.createCell(2).setCellValue(entry.naverCategory());
-        row.createCell(3).setCellValue(keyword.keyword());
+        row.createCell(3).setCellValue(removeKeywordSpaces(keyword.keyword()));
         row.createCell(4).setCellValue(entry.rank());
         writeScore(row, 5, keyword.finalScore(), scoreStyle);
         writeScore(row, 6, keyword.titleScore(), scoreStyle);
@@ -71,6 +71,10 @@ public class KeywordDetailSheetWriter {
         writeScore(row, 8, keyword.evidenceScore(), scoreStyle);
         writeScore(row, 9, keyword.specificityScore(), scoreStyle);
         row.createCell(10).setCellValue(String.join(", ", entry.reasons()));
+    }
+
+    private String removeKeywordSpaces(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "");
     }
 
     private void writeScore(Row row, int columnIndex, double value, CellStyle scoreStyle) {
