@@ -45,12 +45,17 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.imageio.ImageIO;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -73,6 +78,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProductExcelProcessingService {
     private static final int PRODUCT_IMAGE_SIZE = 1000;
     private static final String PRODUCT_IMAGE_EXTENSION = ".jpg";
+    private static final int MIN_TARGET_SIZE_PERCENT = 30;
+    private static final int MAX_TARGET_SIZE_PERCENT = 100;
+    private static final float MIN_JPEG_QUALITY = 0.1f;
+    private static final float MAX_JPEG_QUALITY = 1.0f;
+    private static final int JPEG_QUALITY_SEARCH_ITERATIONS = 8;
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
@@ -504,13 +514,21 @@ public class ProductExcelProcessingService {
     ) {
     }
 
-    public byte[] downloadImage(String imageUrl) {
+    public byte[] downloadImage(String imageUrl, Integer targetSizePercent) {
         if (!isHttpUrl(imageUrl)) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "이미지 URL이 비어 있거나 올바르지 않습니다.");
         }
+        if (targetSizePercent == null
+                || targetSizePercent < MIN_TARGET_SIZE_PERCENT
+                || targetSizePercent > MAX_TARGET_SIZE_PERCENT) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "목표 용량 비율은 30~100 사이여야 합니다.");
+        }
 
         try {
-            return resizeImageToSquare(fetchImage(imageUrl));
+            byte[] originalImage = fetchImage(imageUrl);
+            BufferedImage resizedImage = resizeImageToSquare(originalImage);
+            long targetBytes = Math.max(1L, Math.round(originalImage.length * targetSizePercent / 100.0));
+            return compressJpegToTarget(resizedImage, targetBytes);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, e.getMessage());
         } catch (InterruptedException e) {
@@ -572,7 +590,7 @@ public class ProductExcelProcessingService {
         return response.body();
     }
 
-    private byte[] resizeImageToSquare(byte[] imageBytes) throws IOException {
+    private BufferedImage resizeImageToSquare(byte[] imageBytes) throws IOException {
         BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
         if (sourceImage == null) {
             throw new IOException("지원하지 않는 이미지 형식입니다.");
@@ -605,11 +623,55 @@ public class ProductExcelProcessingService {
             graphics.dispose();
         }
 
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        if (!ImageIO.write(resizedImage, "jpg", outputStream)) {
-            throw new IOException("이미지 리사이즈 결과를 생성하지 못했습니다.");
+        return resizedImage;
+    }
+
+    private byte[] compressJpegToTarget(BufferedImage image, long targetBytes) throws IOException {
+        byte[] highestQuality = writeJpeg(image, MAX_JPEG_QUALITY);
+        if (highestQuality.length <= targetBytes) {
+            return highestQuality;
         }
-        return outputStream.toByteArray();
+
+        byte[] lowestQuality = writeJpeg(image, MIN_JPEG_QUALITY);
+        if (lowestQuality.length > targetBytes) {
+            return lowestQuality;
+        }
+
+        byte[] bestResult = lowestQuality;
+        float low = MIN_JPEG_QUALITY;
+        float high = MAX_JPEG_QUALITY;
+        for (int iteration = 0; iteration < JPEG_QUALITY_SEARCH_ITERATIONS; iteration++) {
+            float quality = (low + high) / 2;
+            byte[] candidate = writeJpeg(image, quality);
+            if (candidate.length <= targetBytes) {
+                bestResult = candidate;
+                low = quality;
+            } else {
+                high = quality;
+            }
+        }
+        return bestResult;
+    }
+
+    private byte[] writeJpeg(BufferedImage image, float quality) throws IOException {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+        if (!writers.hasNext()) {
+            throw new IOException("JPEG 이미지 인코더를 찾지 못했습니다.");
+        }
+
+        ImageWriter writer = writers.next();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+             ImageOutputStream imageOutputStream = ImageIO.createImageOutputStream(outputStream)) {
+            writer.setOutput(imageOutputStream);
+            ImageWriteParam parameters = writer.getDefaultWriteParam();
+            parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            parameters.setCompressionQuality(quality);
+            writer.write(null, new IIOImage(image, null, null), parameters);
+            imageOutputStream.flush();
+            return outputStream.toByteArray();
+        } finally {
+            writer.dispose();
+        }
     }
 
     private int findRequiredColumnIndex(Row headerRow, String columnName) {

@@ -91,9 +91,9 @@ public class ProductExcelJobController {
     public ResponseEntity<ByteArrayResource> downloadImage(
             @RequestBody ProductImageDownloadRequest request
     ) {
-        byte[] image = productExcelProcessingService.downloadImage(request.url());
+        byte[] image = productExcelProcessingService.downloadImage(request.url(), request.targetSizePercent());
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentType(MediaType.IMAGE_JPEG)
                 .body(new ByteArrayResource(image));
     }
 
