@@ -89,9 +89,15 @@ public class ProductExcelJobController {
     @Operation(summary = "상품 이미지 단건 다운로드")
     @PostMapping(value = "/images/download", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ByteArrayResource> downloadImage(
+            @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody ProductImageDownloadRequest request
     ) {
-        byte[] image = productExcelProcessingService.downloadImage(request.url(), request.targetSizePercent());
+        byte[] image = productExcelProcessingService.downloadImage(
+                request.url(),
+                request.targetSizePercent(),
+                loginUser.id(),
+                Boolean.TRUE.equals(request.applyWatermark())
+        );
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_JPEG)
                 .body(new ByteArrayResource(image));

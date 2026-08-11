@@ -16,6 +16,9 @@ import com.be.productexceljob.dto.ProductImageDownloadFailure;
 import com.be.productexceljob.dto.ProductImageDownloadItem;
 import com.be.productexceljob.dto.ProductImageDownloadPrepareResponse;
 import com.be.productexceljob.excel.KeywordDetailSheetWriter;
+import com.be.watermark.domain.WatermarkPosition;
+import com.be.watermark.service.UserWatermarkService;
+import com.be.watermark.service.UserWatermarkService.WatermarkImage;
 import com.be.keyword.CategoryTokenExtractor;
 import com.be.keyword.KeywordCandidateRanker;
 import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
@@ -27,6 +30,7 @@ import com.be.keyword.ProductNameTokenExtractor;
 import com.be.keyword.SimilarProductRepeatedPhraseExtractor;
 import com.be.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
 import java.awt.Color;
+import java.awt.AlphaComposite;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -95,6 +99,7 @@ public class ProductExcelProcessingService {
     private final KeywordSynonymDictionary keywordSynonymDictionary;
     private final ProductNameTokenExtractor productNameTokenExtractor;
     private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
+    private final UserWatermarkService userWatermarkService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -514,7 +519,12 @@ public class ProductExcelProcessingService {
     ) {
     }
 
-    public byte[] downloadImage(String imageUrl, Integer targetSizePercent) {
+    public byte[] downloadImage(
+            String imageUrl,
+            Integer targetSizePercent,
+            Long userId,
+            boolean applyWatermark
+    ) {
         if (!isHttpUrl(imageUrl)) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "이미지 URL이 비어 있거나 올바르지 않습니다.");
         }
@@ -527,6 +537,9 @@ public class ProductExcelProcessingService {
         try {
             byte[] originalImage = fetchImage(imageUrl);
             BufferedImage resizedImage = resizeImageToSquare(originalImage);
+            if (applyWatermark) {
+                applyWatermark(resizedImage, userWatermarkService.getRequiredImage(userId));
+            }
             long targetBytes = Math.max(1L, Math.round(originalImage.length * targetSizePercent / 100.0));
             return compressJpegToTarget(resizedImage, targetBytes);
         } catch (IOException e) {
@@ -624,6 +637,80 @@ public class ProductExcelProcessingService {
         }
 
         return resizedImage;
+    }
+
+    private void applyWatermark(BufferedImage productImage, WatermarkImage watermark) throws IOException {
+        BufferedImage watermarkImage = ImageIO.read(new ByteArrayInputStream(watermark.content()));
+        if (watermarkImage == null) {
+            throw new IOException("저장된 워터마크 이미지를 읽지 못했습니다.");
+        }
+
+        int targetWidth = Math.max(1, productImage.getWidth() * watermark.sizePercent() / 100);
+        int targetHeight = Math.max(1, (int) Math.round(
+                targetWidth * watermarkImage.getHeight() / (double) watermarkImage.getWidth()
+        ));
+        if (targetHeight > productImage.getHeight()) {
+            targetHeight = productImage.getHeight();
+            targetWidth = Math.max(1, (int) Math.round(
+                    targetHeight * watermarkImage.getWidth() / (double) watermarkImage.getHeight()
+            ));
+        }
+
+        int margin = Math.max(10, productImage.getWidth() / 50);
+        WatermarkCoordinates coordinates = watermarkCoordinates(
+                productImage.getWidth(),
+                productImage.getHeight(),
+                targetWidth,
+                targetHeight,
+                margin,
+                watermark.position()
+        );
+
+        Graphics2D graphics = productImage.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setComposite(AlphaComposite.getInstance(
+                    AlphaComposite.SRC_OVER,
+                    watermark.opacity() / 100.0f
+            ));
+            graphics.drawImage(
+                    watermarkImage,
+                    coordinates.x(),
+                    coordinates.y(),
+                    targetWidth,
+                    targetHeight,
+                    null
+            );
+        } finally {
+            graphics.dispose();
+        }
+    }
+
+    private WatermarkCoordinates watermarkCoordinates(
+            int imageWidth,
+            int imageHeight,
+            int watermarkWidth,
+            int watermarkHeight,
+            int margin,
+            WatermarkPosition position
+    ) {
+        return switch (position) {
+            case TOP_LEFT -> new WatermarkCoordinates(margin, margin);
+            case TOP_RIGHT -> new WatermarkCoordinates(imageWidth - watermarkWidth - margin, margin);
+            case CENTER -> new WatermarkCoordinates(
+                    (imageWidth - watermarkWidth) / 2,
+                    (imageHeight - watermarkHeight) / 2
+            );
+            case BOTTOM_LEFT -> new WatermarkCoordinates(margin, imageHeight - watermarkHeight - margin);
+            case BOTTOM_RIGHT -> new WatermarkCoordinates(
+                    imageWidth - watermarkWidth - margin,
+                    imageHeight - watermarkHeight - margin
+            );
+        };
+    }
+
+    private record WatermarkCoordinates(int x, int y) {
     }
 
     private byte[] compressJpegToTarget(BufferedImage image, long targetBytes) throws IOException {

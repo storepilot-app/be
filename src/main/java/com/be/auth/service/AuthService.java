@@ -18,6 +18,7 @@ import com.be.global.exception.ErrorCode;
 import com.be.mycategory.repository.MyCategoryMappingRepository;
 import com.be.mycategory.repository.MyCategoryMappingVersionRepository;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
+import com.be.watermark.repository.UserWatermarkRepository;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -43,6 +44,7 @@ public class AuthService {
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
+    private final UserWatermarkRepository userWatermarkRepository;
 
     @Transactional
     public SignupResult signup(AuthRequest request) {
@@ -130,6 +132,7 @@ public class AuthService {
         myCategoryMappingRepository.deleteByUserId(user.getId());
         myCategoryMappingVersionRepository.deleteByUserId(user.getId());
         productCategoryFeedbackRepository.deleteByUserId(user.getId());
+        userWatermarkRepository.deleteByUserId(user.getId());
         userRepository.delete(user);
     }
 
