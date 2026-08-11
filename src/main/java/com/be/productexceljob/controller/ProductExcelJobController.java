@@ -5,6 +5,7 @@ import com.be.global.response.CommonResponse;
 import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.dto.ProductImageDownloadPrepareResponse;
 import com.be.productexceljob.dto.ProductImageDownloadRequest;
+import com.be.productexceljob.dto.ProductImageFailureExcelRequest;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
 import com.be.productexceljob.service.ProductExcelProcessingService;
@@ -94,5 +95,17 @@ public class ProductExcelJobController {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(new ByteArrayResource(image));
+    }
+
+    @Operation(summary = "상품 이미지 다운로드 실패 목록 엑셀 생성")
+    @PostMapping(value = "/images/failures/excel", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ByteArrayResource> downloadImageFailures(
+            @RequestBody ProductImageFailureExcelRequest request
+    ) {
+        byte[] content = productExcelProcessingService.createImageFailureExcel(request.failures());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"image_download_failures.xlsx\"")
+                .body(new ByteArrayResource(content));
     }
 }
