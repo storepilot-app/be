@@ -71,6 +71,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class ProductExcelProcessingService {
     private static final int PRODUCT_IMAGE_SIZE = 1000;
+    private static final String PRODUCT_IMAGE_EXTENSION = ".jpg";
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
@@ -482,7 +483,7 @@ public class ProductExcelProcessingService {
                 continue;
             }
 
-            String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), imageExtension(imageUrl));
+            String entryName = uniqueEntryName(entryNames, safeFilename(filenameBase), PRODUCT_IMAGE_EXTENSION);
             images.add(new ProductImageDownloadItem(rowIndex + 1, filenameBase, entryName, imageUrl));
         }
 
@@ -508,7 +509,7 @@ public class ProductExcelProcessingService {
         }
 
         try {
-            return resizeImageToSquare(fetchImage(imageUrl), imageUrl);
+            return resizeImageToSquare(fetchImage(imageUrl));
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, e.getMessage());
         } catch (InterruptedException e) {
@@ -530,18 +531,16 @@ public class ProductExcelProcessingService {
         return response.body();
     }
 
-    private byte[] resizeImageToSquare(byte[] imageBytes, String imageUrl) throws IOException {
+    private byte[] resizeImageToSquare(byte[] imageBytes) throws IOException {
         BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
         if (sourceImage == null) {
             throw new IOException("지원하지 않는 이미지 형식입니다.");
         }
 
-        String extension = imageExtension(imageUrl);
-        boolean png = ".png".equals(extension);
         BufferedImage resizedImage = new BufferedImage(
                 PRODUCT_IMAGE_SIZE,
                 PRODUCT_IMAGE_SIZE,
-                png ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB
+                BufferedImage.TYPE_INT_RGB
         );
 
         Graphics2D graphics = resizedImage.createGraphics();
@@ -549,10 +548,8 @@ public class ProductExcelProcessingService {
             graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
             graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
             graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            if (!png) {
-                graphics.setColor(Color.WHITE);
-                graphics.fillRect(0, 0, PRODUCT_IMAGE_SIZE, PRODUCT_IMAGE_SIZE);
-            }
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, PRODUCT_IMAGE_SIZE, PRODUCT_IMAGE_SIZE);
 
             double scale = Math.min(
                     PRODUCT_IMAGE_SIZE / (double) sourceImage.getWidth(),
@@ -568,8 +565,7 @@ public class ProductExcelProcessingService {
         }
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        String formatName = png ? "png" : "jpg";
-        if (!ImageIO.write(resizedImage, formatName, outputStream)) {
+        if (!ImageIO.write(resizedImage, "jpg", outputStream)) {
             throw new IOException("이미지 리사이즈 결과를 생성하지 못했습니다.");
         }
         return outputStream.toByteArray();
@@ -977,22 +973,6 @@ public class ProductExcelProcessingService {
             ScoredKeyword score,
             List<String> reasons
     ) {
-    }
-
-    private String imageExtension(String imageUrl) {
-        try {
-            String path = URI.create(imageUrl).getPath();
-            int dotIndex = path.lastIndexOf('.');
-            if (dotIndex >= 0) {
-                String extension = path.substring(dotIndex).toLowerCase(Locale.ROOT);
-                if (extension.matches("\\.(jpg|jpeg|png)")) {
-                    return extension;
-                }
-            }
-        } catch (IllegalArgumentException ignored) {
-            return ".jpg";
-        }
-        return ".jpg";
     }
 
     private String normalizeImageUrl(String imageUrl) {
