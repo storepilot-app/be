@@ -41,12 +41,12 @@ public class MyCategoryMappingController {
 
     @Operation(
             summary = "마이카테고리 매핑 엑셀 업로드",
-            description = "매핑 엑셀의 A열(마이카테고리)과 H열(네이버 카테고리 코드)을 읽어 사용자별 1:1 매핑으로 저장합니다."
+            description = "첫 번째 행에서 '마이카테'와 '네이버카테' 열을 찾아 사용자별 1:1 매핑으로 저장합니다. 열 순서는 자유롭습니다."
     )
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<MyCategoryMappingUploadResponse> upload(
             @AuthenticationPrincipal LoginUser loginUser,
-            @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). A열은 마이카테고리, H열은 네이버 카테고리 코드입니다.", required = true)
+            @Parameter(description = "마이카테고리 매핑 엑셀 파일(.xlsx, .xls). 첫 번째 행에 '마이카테'와 '네이버카테' 열이 필요합니다.", required = true)
             @RequestParam("file") MultipartFile file
     ) {
         MyCategoryMappingVersion version = myCategoryMappingUploadService.upload(file, loginUser.id());
