@@ -33,8 +33,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class MyCategoryMappingUploadService {
-    private static final int MY_CATEGORY_COLUMN_INDEX = 0;
-    private static final int NAVER_CATEGORY_COLUMN_INDEX = 7;
+    private static final String MY_CATEGORY_HEADER = "마이카테";
+    private static final String NAVER_CATEGORY_HEADER = "네이버카테";
 
     private final MyCategoryMappingRepository myCategoryMappingRepository;
     private final MyCategoryMappingVersionRepository myCategoryMappingVersionRepository;
@@ -101,6 +101,7 @@ public class MyCategoryMappingUploadService {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
+            HeaderColumns headerColumns = resolveHeaderColumns(sheet.getRow(0), formatter);
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
             int sourceRowCount = 0;
             int invalidRowCount = 0;
@@ -113,8 +114,8 @@ public class MyCategoryMappingUploadService {
                 }
                 sourceRowCount++;
 
-                String myCategoryCode = readCell(row, MY_CATEGORY_COLUMN_INDEX, formatter);
-                String naverCategoryCode = readCell(row, NAVER_CATEGORY_COLUMN_INDEX, formatter);
+                String myCategoryCode = readCell(row, headerColumns.myCategoryColumnIndex(), formatter);
+                String naverCategoryCode = readCell(row, headerColumns.naverCategoryColumnIndex(), formatter);
                 validateNaverCategoryCode(myCategoryCode, naverCategoryCode, rowIndex + 1);
                 if (myCategoryCode.isBlank() || naverCategoryCode.isBlank()) {
                     invalidRowCount++;
@@ -180,6 +181,35 @@ public class MyCategoryMappingUploadService {
         return formatter.formatCellValue(cell).trim();
     }
 
+    private HeaderColumns resolveHeaderColumns(Row headerRow, DataFormatter formatter) {
+        if (headerRow == null) {
+            throw invalidHeader("첫 번째 행에 열 제목이 없습니다.");
+        }
+
+        Integer myCategoryColumnIndex = null;
+        Integer naverCategoryColumnIndex = null;
+        for (int columnIndex = 0; columnIndex < headerRow.getLastCellNum(); columnIndex++) {
+            String header = readCell(headerRow, columnIndex, formatter);
+            if (MY_CATEGORY_HEADER.equals(header)) {
+                if (myCategoryColumnIndex != null) {
+                    throw invalidHeader("'" + MY_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
+                }
+                myCategoryColumnIndex = columnIndex;
+            }
+            if (NAVER_CATEGORY_HEADER.equals(header)) {
+                if (naverCategoryColumnIndex != null) {
+                    throw invalidHeader("'" + NAVER_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
+                }
+                naverCategoryColumnIndex = columnIndex;
+            }
+        }
+
+        if (myCategoryColumnIndex == null || naverCategoryColumnIndex == null) {
+            throw invalidHeader("첫 번째 행에 '마이카테'와 '네이버카테' 열이 모두 있어야 합니다.");
+        }
+        return new HeaderColumns(myCategoryColumnIndex, naverCategoryColumnIndex);
+    }
+
     private void validateNaverCategoryCode(
             String myCategoryCode,
             String naverCategoryCode,
@@ -188,9 +218,13 @@ public class MyCategoryMappingUploadService {
         if (!myCategoryCode.isBlank() && naverCategoryCode.isBlank()) {
             throw new BusinessException(
                     ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE,
-                    "H열에 네이버 카테고리 코드가 없습니다. 엑셀 행: " + rowNumber
+                    "'네이버카테' 열에 네이버 카테고리 코드가 없습니다. 엑셀 행: " + rowNumber
             );
         }
+    }
+
+    private BusinessException invalidHeader(String message) {
+        return new BusinessException(ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE, message);
     }
 
     private void validateFile(MultipartFile file) {
@@ -228,6 +262,12 @@ public class MyCategoryMappingUploadService {
             int duplicateRowCount,
             int matchedCount,
             List<MyCategoryMapping> mappings
+    ) {
+    }
+
+    private record HeaderColumns(
+            int myCategoryColumnIndex,
+            int naverCategoryColumnIndex
     ) {
     }
 }
