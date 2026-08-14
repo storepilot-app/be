@@ -39,3 +39,9 @@ out/
 .env.production
 
 /uploads
+
+### k6 load test ###
+/load-test/k6/users.local.json
+/load-test/k6/results/
+/load-test/k6/fixtures/*.xlsx
+!/load-test/k6/fixtures/.gitkeep
