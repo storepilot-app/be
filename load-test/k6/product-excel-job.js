@@ -19,10 +19,8 @@ if (!Number.isInteger(virtualUsers) || virtualUsers < 1) {
   throw new Error("VUS must be a positive integer.");
 }
 
-if (users.length < virtualUsers) {
-  throw new Error(
-    `Not enough test accounts: VUS=${virtualUsers}, accounts=${users.length}`,
-  );
+if (!Array.isArray(users) || users.length === 0) {
+  throw new Error("At least one test account is required.");
 }
 
 export const options = {
@@ -59,7 +57,7 @@ function stopWithFailure(message, startedAt) {
 }
 
 export default function () {
-  const user = users[__VU - 1];
+  const user = users[(__VU - 1) % users.length];
 
   const loginResponse = http.post(
     `${baseUrl}/api/v1/auth/login`,
