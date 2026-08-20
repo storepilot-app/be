@@ -34,6 +34,11 @@ public class QnaService {
         return qnaFaqRepository.findAllByOrderBySortOrderAscIdAsc();
     }
 
+    public QnaFaq getActiveFaq(Long faqId) {
+        return qnaFaqRepository.findByIdAndActiveTrue(faqId)
+                .orElseThrow(() -> invalid("자주 묻는 질문을 찾을 수 없습니다."));
+    }
+
     public List<QnaQuestion> getMyQuestions(Long userId) {
         validateUserId(userId);
         return qnaQuestionRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -142,7 +147,7 @@ public class QnaService {
         }
     }
 
-    private QnaFaq getFaq(Long faqId) {
+    public QnaFaq getFaq(Long faqId) {
         return qnaFaqRepository.findById(faqId)
                 .orElseThrow(() -> invalid("자주 묻는 질문을 찾을 수 없습니다."));
     }

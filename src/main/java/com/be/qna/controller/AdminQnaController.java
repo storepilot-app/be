@@ -44,6 +44,16 @@ public class AdminQnaController {
         return CommonResponse.success(QnaFaqListResponse.from(qnaService.getAllFaqs()));
     }
 
+    @Operation(summary = "자주 묻는 질문 상세 조회")
+    @GetMapping("/faqs/{faqId}")
+    public CommonResponse<QnaFaqResponse> getFaq(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable Long faqId
+    ) {
+        requireAdmin(loginUser);
+        return CommonResponse.success(QnaFaqResponse.from(qnaService.getFaq(faqId)));
+    }
+
     @Operation(summary = "자주 묻는 질문 등록")
     @PostMapping(value = "/faqs", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CommonResponse<QnaFaqResponse> createFaq(

@@ -4,6 +4,7 @@ import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.qna.domain.QnaQuestion;
 import com.be.qna.dto.QnaFaqListResponse;
+import com.be.qna.dto.QnaFaqResponse;
 import com.be.qna.dto.QnaQuestionCreateRequest;
 import com.be.qna.dto.QnaQuestionListResponse;
 import com.be.qna.dto.QnaQuestionResponse;
@@ -32,6 +33,12 @@ public class QnaController {
     @GetMapping("/faqs")
     public CommonResponse<QnaFaqListResponse> getFaqs() {
         return CommonResponse.success(QnaFaqListResponse.from(qnaService.getActiveFaqs()));
+    }
+
+    @Operation(summary = "자주 묻는 질문 상세 조회")
+    @GetMapping("/faqs/{faqId}")
+    public CommonResponse<QnaFaqResponse> getFaq(@PathVariable Long faqId) {
+        return CommonResponse.success(QnaFaqResponse.from(qnaService.getActiveFaq(faqId)));
     }
 
     @Operation(summary = "내 1:1 문의 목록 조회")
