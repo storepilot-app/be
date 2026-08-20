@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,5 +59,15 @@ public class QnaController {
     ) {
         QnaQuestion question = qnaService.createQuestion(loginUser.id(), request);
         return CommonResponse.success(QnaQuestionResponse.from(question), "문의가 등록되었습니다.");
+    }
+
+    @Operation(summary = "내 1:1 문의 삭제")
+    @DeleteMapping("/questions/{questionId}")
+    public CommonResponse<Void> deleteMyQuestion(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable Long questionId
+    ) {
+        qnaService.deleteMyQuestion(loginUser.id(), questionId);
+        return CommonResponse.success(null, "문의가 삭제되었습니다.");
     }
 }

@@ -116,6 +116,12 @@ public class QnaService {
     }
 
     @Transactional
+    public void deleteMyQuestion(Long userId, Long questionId) {
+        QnaQuestion question = getMyQuestion(userId, questionId);
+        qnaQuestionRepository.delete(question);
+    }
+
+    @Transactional
     public QnaQuestion answerQuestion(Long adminUserId, Long questionId, QnaQuestionAnswerRequest request) {
         validateUserId(adminUserId);
         if (request == null) {
