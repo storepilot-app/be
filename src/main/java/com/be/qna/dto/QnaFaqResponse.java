@@ -4,9 +4,9 @@ import com.be.qna.domain.QnaFaq;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 
-@Schema(description = "FAQ 항목")
+@Schema(description = "자주 묻는 질문 항목")
 public record QnaFaqResponse(
-        @Schema(description = "FAQ ID", example = "1")
+        @Schema(description = "자주 묻는 질문 ID", example = "1")
         Long id,
         @Schema(description = "질문", example = "카테고리 및 키워드 찾기는 어떻게 사용하나요?")
         String question,
