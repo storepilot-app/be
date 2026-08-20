@@ -57,14 +57,14 @@ public class QnaService {
     @Transactional
     public QnaFaq createFaq(QnaFaqSaveRequest request) {
         if (request == null) {
-            throw invalid("FAQ 내용이 필요합니다.");
+            throw invalid("자주 묻는 질문 내용이 필요합니다.");
         }
 
-        String question = required(request.question(), "FAQ 질문을 입력해 주세요.");
-        String answer = required(request.answer(), "FAQ 답변을 입력해 주세요.");
+        String question = required(request.question(), "질문을 입력해 주세요.");
+        String answer = required(request.answer(), "답변을 입력해 주세요.");
         int sortOrder = request.sortOrder() == null ? 0 : Math.max(0, request.sortOrder());
-        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "FAQ 질문은 300자 이하로 입력해 주세요.");
-        validateMaxLength(answer, ANSWER_MAX_LENGTH, "FAQ 답변은 5000자 이하로 입력해 주세요.");
+        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "질문은 300자 이하로 입력해 주세요.");
+        validateMaxLength(answer, ANSWER_MAX_LENGTH, "답변은 5000자 이하로 입력해 주세요.");
 
         return qnaFaqRepository.save(QnaFaq.create(question, answer, sortOrder));
     }
@@ -72,14 +72,14 @@ public class QnaService {
     @Transactional
     public QnaFaq updateFaq(Long faqId, QnaFaqSaveRequest request) {
         if (request == null) {
-            throw invalid("FAQ 내용이 필요합니다.");
+            throw invalid("자주 묻는 질문 내용이 필요합니다.");
         }
 
-        String question = required(request.question(), "FAQ 질문을 입력해 주세요.");
-        String answer = required(request.answer(), "FAQ 답변을 입력해 주세요.");
+        String question = required(request.question(), "질문을 입력해 주세요.");
+        String answer = required(request.answer(), "답변을 입력해 주세요.");
         int sortOrder = request.sortOrder() == null ? 0 : Math.max(0, request.sortOrder());
-        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "FAQ 질문은 300자 이하로 입력해 주세요.");
-        validateMaxLength(answer, ANSWER_MAX_LENGTH, "FAQ 답변은 5000자 이하로 입력해 주세요.");
+        validateMaxLength(question, FAQ_QUESTION_MAX_LENGTH, "질문은 300자 이하로 입력해 주세요.");
+        validateMaxLength(answer, ANSWER_MAX_LENGTH, "답변은 5000자 이하로 입력해 주세요.");
 
         QnaFaq faq = getFaq(faqId);
         faq.update(question, answer, sortOrder);
@@ -144,7 +144,7 @@ public class QnaService {
 
     private QnaFaq getFaq(Long faqId) {
         return qnaFaqRepository.findById(faqId)
-                .orElseThrow(() -> invalid("FAQ를 찾을 수 없습니다."));
+                .orElseThrow(() -> invalid("자주 묻는 질문을 찾을 수 없습니다."));
     }
 
     private String required(String value, String message) {

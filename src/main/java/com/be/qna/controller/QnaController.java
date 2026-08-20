@@ -23,12 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/qna")
-@Tag(name = "QnA", description = "FAQ 조회 및 사용자 1:1 문의 API")
+@Tag(name = "QnA", description = "자주 묻는 질문 조회 및 사용자 1:1 문의 API")
 @RequiredArgsConstructor
 public class QnaController {
     private final QnaService qnaService;
 
-    @Operation(summary = "FAQ 목록 조회")
+    @Operation(summary = "자주 묻는 질문 목록 조회")
     @GetMapping("/faqs")
     public CommonResponse<QnaFaqListResponse> getFaqs() {
         return CommonResponse.success(QnaFaqListResponse.from(qnaService.getActiveFaqs()));

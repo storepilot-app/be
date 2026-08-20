@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminQnaController {
     private final QnaService qnaService;
 
-    @Operation(summary = "전체 FAQ 목록 조회")
+    @Operation(summary = "전체 자주 묻는 질문 목록 조회")
     @GetMapping("/faqs")
     public CommonResponse<QnaFaqListResponse> getFaqs(
             @AuthenticationPrincipal LoginUser loginUser
@@ -44,7 +44,7 @@ public class AdminQnaController {
         return CommonResponse.success(QnaFaqListResponse.from(qnaService.getAllFaqs()));
     }
 
-    @Operation(summary = "FAQ 등록")
+    @Operation(summary = "자주 묻는 질문 등록")
     @PostMapping(value = "/faqs", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CommonResponse<QnaFaqResponse> createFaq(
             @AuthenticationPrincipal LoginUser loginUser,
@@ -52,10 +52,10 @@ public class AdminQnaController {
     ) {
         requireAdmin(loginUser);
         QnaFaq faq = qnaService.createFaq(request);
-        return CommonResponse.success(QnaFaqResponse.from(faq), "FAQ가 등록되었습니다.");
+        return CommonResponse.success(QnaFaqResponse.from(faq), "자주 묻는 질문이 등록되었습니다.");
     }
 
-    @Operation(summary = "FAQ 수정")
+    @Operation(summary = "자주 묻는 질문 수정")
     @PutMapping(value = "/faqs/{faqId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CommonResponse<QnaFaqResponse> updateFaq(
             @AuthenticationPrincipal LoginUser loginUser,
@@ -64,10 +64,10 @@ public class AdminQnaController {
     ) {
         requireAdmin(loginUser);
         QnaFaq faq = qnaService.updateFaq(faqId, request);
-        return CommonResponse.success(QnaFaqResponse.from(faq), "FAQ가 수정되었습니다.");
+        return CommonResponse.success(QnaFaqResponse.from(faq), "자주 묻는 질문이 수정되었습니다.");
     }
 
-    @Operation(summary = "FAQ 노출")
+    @Operation(summary = "자주 묻는 질문 노출")
     @PatchMapping("/faqs/{faqId}/activate")
     public CommonResponse<QnaFaqResponse> activateFaq(
             @AuthenticationPrincipal LoginUser loginUser,
@@ -75,10 +75,10 @@ public class AdminQnaController {
     ) {
         requireAdmin(loginUser);
         QnaFaq faq = qnaService.activateFaq(faqId);
-        return CommonResponse.success(QnaFaqResponse.from(faq), "FAQ가 노출 처리되었습니다.");
+        return CommonResponse.success(QnaFaqResponse.from(faq), "자주 묻는 질문이 노출 처리되었습니다.");
     }
 
-    @Operation(summary = "FAQ 숨김")
+    @Operation(summary = "자주 묻는 질문 숨김")
     @PatchMapping("/faqs/{faqId}/deactivate")
     public CommonResponse<QnaFaqResponse> deactivateFaq(
             @AuthenticationPrincipal LoginUser loginUser,
@@ -86,7 +86,7 @@ public class AdminQnaController {
     ) {
         requireAdmin(loginUser);
         QnaFaq faq = qnaService.deactivateFaq(faqId);
-        return CommonResponse.success(QnaFaqResponse.from(faq), "FAQ가 숨김 처리되었습니다.");
+        return CommonResponse.success(QnaFaqResponse.from(faq), "자주 묻는 질문이 숨김 처리되었습니다.");
     }
 
     @Operation(summary = "전체 1:1 문의 목록 조회")
