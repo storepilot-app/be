@@ -11,10 +11,12 @@ import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -49,7 +51,7 @@ public class TrainingProductAiClient {
         files.forEach(file -> body.add("files", file.getResource()));
 
         try {
-            byte[] responseBody = restClient().post()
+            byte[] responseBody = rebuildRestClient().post()
                     .uri("/ai/categories/product-index/rebuild")
                     .accept(MediaType.APPLICATION_JSON)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
@@ -149,6 +151,16 @@ public class TrainingProductAiClient {
 
     private RestClient restClient() {
         return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
+    }
+
+    private RestClient rebuildRestClient() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(2));
+        requestFactory.setReadTimeout(Duration.ofMinutes(10));
+        return RestClient.builder()
+                .baseUrl(aiServerProperties.baseUrl())
+                .requestFactory(requestFactory)
+                .build();
     }
 
     private byte[] readResponseBytes(ClientHttpResponse response) throws IOException {
