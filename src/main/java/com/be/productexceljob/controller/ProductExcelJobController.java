@@ -47,7 +47,11 @@ public class ProductExcelJobController {
             @Parameter(description = "결과 엑셀에 선택 과정 확인용 열을 포함할지 여부")
             @RequestParam(value = "includeSelectionDetails", defaultValue = "true") boolean includeSelectionDetails
     ) {
-        ProductExcelJobCreateResponse response = productExcelJobService.create(file, loginUser.id(), includeSelectionDetails);
+        ProductExcelJobCreateResponse response = productExcelJobService.createExcelJob(
+                file,
+                loginUser.id(),
+                includeSelectionDetails
+        );
         return CommonResponse.success(response, response.message());
     }
 

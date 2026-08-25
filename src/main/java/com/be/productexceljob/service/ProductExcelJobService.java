@@ -37,7 +37,7 @@ public class ProductExcelJobService {
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId, boolean includeSelectionDetails) {
+    public ProductExcelJobCreateResponse createExcelJob(MultipartFile file, Long userId, boolean includeSelectionDetails) {
         validateUserId(userId);
         productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
