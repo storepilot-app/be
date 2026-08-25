@@ -61,7 +61,7 @@ public class ProductExcelJobController {
             @AuthenticationPrincipal LoginUser loginUser,
             @PathVariable long jobId
     ) {
-        return CommonResponse.success(productExcelJobService.status(jobId, loginUser.id()));
+        return CommonResponse.success(productExcelJobService.getExcelJobStatus(jobId, loginUser.id()));
     }
 
     @Operation(summary = "완료된 상품 엑셀 결과 다운로드")
@@ -70,7 +70,7 @@ public class ProductExcelJobController {
             @AuthenticationPrincipal LoginUser loginUser,
             @PathVariable long jobId
     ) {
-        ExcelDownloadResult result = productExcelJobService.download(jobId, loginUser.id());
+        ExcelDownloadResult result = productExcelJobService.getExcelDownloadResult(jobId, loginUser.id());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + result.filename())

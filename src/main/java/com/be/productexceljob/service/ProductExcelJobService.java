@@ -64,13 +64,13 @@ public class ProductExcelJobService {
         return ProductExcelJobCreateResponse.from(job);
     }
 
-    public ProductExcelJobStatusResponse status(long jobId, Long userId) {
-        ProductExcelJob job = findJob(jobId, userId);
+    public ProductExcelJobStatusResponse getExcelJobStatus(long jobId, Long userId) {
+        ProductExcelJob job = findExcelJob(jobId, userId);
         return ProductExcelJobStatusResponse.from(job);
     }
 
-    public ExcelDownloadResult download(long jobId, Long userId) {
-        ProductExcelJob job = findJob(jobId, userId);
+    public ExcelDownloadResult getExcelDownloadResult(long jobId, Long userId) {
+        ProductExcelJob job = findExcelJob(jobId, userId);
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {
@@ -122,7 +122,7 @@ public class ProductExcelJobService {
         };
     }
 
-    private ProductExcelJob findJob(long jobId, Long userId) {
+    private ProductExcelJob findExcelJob(long jobId, Long userId) {
         return productExcelJobRepository.findByIdAndUserId(jobId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
     }
