@@ -8,8 +8,8 @@ import com.be.productexceljob.dto.ProductImageDownloadRequest;
 import com.be.productexceljob.dto.ProductImageFailureExcelRequest;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
-import com.be.productexceljob.service.ProductExcelProcessingService;
 import com.be.productexceljob.service.ProductExcelJobService;
+import com.be.productexceljob.service.ProductImageDownloadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,7 +36,7 @@ public class ProductExcelJobController {
     private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final ProductExcelJobService productExcelJobService;
-    private final ProductExcelProcessingService productExcelProcessingService;
+    private final ProductImageDownloadService productImageDownloadService;
 
     @Operation(summary = "상품 엑셀 처리 작업 시작")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -82,7 +82,7 @@ public class ProductExcelJobController {
             @Parameter(description = "상품 엑셀 파일(.xlsx, .xls)", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        ProductImageDownloadPrepareResponse response = productExcelProcessingService.prepareImageDownloads(file);
+        ProductImageDownloadPrepareResponse response = productImageDownloadService.prepareImageDownloads(file);
         return CommonResponse.success(response, "이미지 다운로드 목록을 생성했습니다.");
     }
 
@@ -92,7 +92,7 @@ public class ProductExcelJobController {
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody ProductImageDownloadRequest request
     ) {
-        byte[] image = productExcelProcessingService.downloadImage(
+        byte[] image = productImageDownloadService.downloadImage(
                 request.url(),
                 request.targetSizePercent(),
                 loginUser.id(),
@@ -108,7 +108,7 @@ public class ProductExcelJobController {
     public ResponseEntity<ByteArrayResource> downloadImageFailures(
             @RequestBody ProductImageFailureExcelRequest request
     ) {
-        byte[] content = productExcelProcessingService.createImageFailureExcel(request.failures());
+        byte[] content = productImageDownloadService.createImageFailureExcel(request.failures());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(EXCEL_CONTENT_TYPE))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"image_download_failures.xlsx\"")
