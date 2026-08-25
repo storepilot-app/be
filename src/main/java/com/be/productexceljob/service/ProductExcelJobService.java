@@ -82,6 +82,7 @@ public class ProductExcelJobService {
     private void processExcelJob(ProductExcelJob job) {
         job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
+            ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job);
             ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
                     job.getUploadedFilePath(),
                     job.getOriginalFilename(),
@@ -90,7 +91,7 @@ public class ProductExcelJobService {
                     KEYWORD_COUNT,
                     job.getUserId(),
                     job.isIncludeSelectionDetails(),
-                    progressCallback(job)
+                    progressUpdater
             );
             job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
         } catch (Exception error) {
@@ -101,25 +102,6 @@ public class ProductExcelJobService {
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
-    }
-
-    private ProductExcelProgressCallback progressCallback(ProductExcelJob job) {
-        return new ProductExcelProgressCallback() {
-            @Override
-            public void onProgress(int processedCount, int totalCount, String stage) {
-                job.updateProgress(processedCount, totalCount, stage);
-            }
-
-            @Override
-            public void onCategoryCompleted(long elapsedMillis) {
-                job.recordCategoryElapsed(elapsedMillis);
-            }
-
-            @Override
-            public void onKeywordCompleted(long elapsedMillis) {
-                job.recordKeywordElapsed(elapsedMillis);
-            }
-        };
     }
 
     private ProductExcelJob findExcelJob(long jobId, Long userId) {
