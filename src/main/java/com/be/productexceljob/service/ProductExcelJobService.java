@@ -60,7 +60,7 @@ public class ProductExcelJobService {
                 targetPath,
                 includeSelectionDetails
         ));
-        productExcelJobExecutor.execute(() -> process(job)); //process(job)을 지금 요청 스레드에서 바로 실행하지 말고 productExcelJobExecutor가 관리하는 백그라운드 스레드에서 실행
+        productExcelJobExecutor.execute(() -> processExcelJob(job)); // 작업을 요청 스레드가 아닌 전용 Executor에서 실행
         return ProductExcelJobCreateResponse.from(job);
     }
 
@@ -79,7 +79,7 @@ public class ProductExcelJobService {
         return new ExcelDownloadResult(job.getResultFilename(), job.getResultContent());
     }
 
-    private void process(ProductExcelJob job) {
+    private void processExcelJob(ProductExcelJob job) {
         job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
             ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
