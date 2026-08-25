@@ -12,30 +12,20 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.excel.KeywordDetailSheetWriter;
-import com.be.keyword.CategoryTokenExtractor;
-import com.be.keyword.KeywordCandidateRanker;
-import com.be.keyword.KeywordCandidateRanker.ScoredKeyword;
-import com.be.keyword.KeywordCombinationTemplate;
 import com.be.keyword.KeywordDetailEntry;
-import com.be.keyword.KeywordSynonymDictionary;
-import com.be.keyword.KeywordSynonymDictionary.SynonymExpansion;
-import com.be.keyword.ProductNameTokenExtractor;
-import com.be.keyword.SimilarProductRepeatedPhraseExtractor;
-import com.be.keyword.SimilarProductRepeatedPhraseExtractor.ProductSource;
+import com.be.productexceljob.service.ProductKeywordGenerator.GeneratedKeyword;
+import com.be.productexceljob.service.ProductKeywordGenerator.ProductKeywordSource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -59,36 +49,20 @@ public class ProductExcelProcessingService {
     private static final String NO_SELECTED_CATEGORY = "없음";
 
     private final CategoryMatcherService categoryMatcherService;
-    private final CategoryTokenExtractor categoryTokenExtractor;
-    private final KeywordCandidateRanker keywordCandidateRanker;
-    private final KeywordCombinationTemplate keywordCombinationTemplate;
     private final KeywordDetailSheetWriter keywordDetailSheetWriter;
-    private final KeywordSynonymDictionary keywordSynonymDictionary;
-    private final ProductNameTokenExtractor productNameTokenExtractor;
-    private final SimilarProductRepeatedPhraseExtractor similarProductRepeatedPhraseExtractor;
+    private final ProductKeywordGenerator productKeywordGenerator;
 
     @Value("${storepilot.category.batch-size:300}")
     private int categoryBatchSize;
 
-    public ExcelDownloadResult fillAndDownload(
-            Path filePath,
-            String originalFilename,
-            String productNameColumn,
-            String categoryColumn,
-            Integer keywordCount,
-            Long userId,
-            boolean includeSelectionDetails,
+    ExcelDownloadResult processExcel(
+            ProductExcelProcessingRequest request,
             ProductExcelJobProgressUpdater progressUpdater
     ) {
-        try (InputStream inputStream = Files.newInputStream(filePath)) {
-            return fillAndDownload(
+        try (InputStream inputStream = Files.newInputStream(request.filePath())) {
+            return processExcel(
                     inputStream,
-                    originalFilename,
-                    productNameColumn,
-                    categoryColumn,
-                    keywordCount,
-                    userId,
-                    includeSelectionDetails,
+                    request,
                     progressUpdater
             );
         } catch (IOException e) {
@@ -97,14 +71,9 @@ public class ProductExcelProcessingService {
     }
 
     // 실제 처리 로직
-    private ExcelDownloadResult fillAndDownload(
+    private ExcelDownloadResult processExcel(
             InputStream inputStream,
-            String originalFilename,
-            String productNameColumn,
-            String categoryColumn,
-            Integer keywordCount,
-            Long userId,
-            boolean includeSelectionDetails,
+            ProductExcelProcessingRequest request,
             ProductExcelJobProgressUpdater progressUpdater
     ) {
         try (Workbook workbook = WorkbookFactory.create(inputStream);
@@ -120,38 +89,40 @@ public class ProductExcelProcessingService {
                     workbook,
                     sheet,
                     headerRow,
-                    productNameColumn,
-                    categoryColumn,
-                    includeSelectionDetails
+                    request.productNameColumn(),
+                    request.categoryColumn(),
+                    request.includeSelectionDetails()
             );
 
-            int resolvedKeywordCount = keywordCount == null ? DEFAULT_KEYWORD_COUNT : keywordCount;
+            int resolvedKeywordCount = request.keywordCount() == null
+                    ? DEFAULT_KEYWORD_COUNT
+                    : request.keywordCount();
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
             List<ProductExcelRow> productRows = readProductRows(sheet, sheetContext, formatter);
             Map<Integer, MyCategoryMatchResult> myCategoryResults = matchCategories(
                     productRows,
-                    userId,
+                    request.userId(),
                     progressUpdater
             );
+
             List<KeywordDetailEntry> keywordDetails = writeKeywordsAndResults(
                     productRows,
                     myCategoryResults,
                     resolvedKeywordCount,
                     sheetContext,
-                    includeSelectionDetails,
+                    request.includeSelectionDetails(),
                     progressUpdater
             );
-            if (includeSelectionDetails) {
+
+            if (request.includeSelectionDetails()) {
                 writeUnmatchedOrRejectedRatio(sheet, productRows, myCategoryResults);
             }
             keywordDetailSheetWriter.write(workbook, keywordDetails);
 
             progressUpdater.update(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
             workbook.write(outputStream);
-            String filename = buildDownloadFilename(originalFilename);
+            String filename = buildDownloadFilename(request.originalFilename());
             return new ExcelDownloadResult(filename, outputStream.toByteArray());
-        } catch (BusinessException e) {
-            throw e;
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
         }
@@ -221,21 +192,21 @@ public class ProductExcelProcessingService {
     ) {
         long keywordStartedAt = System.nanoTime();
         Map<Integer, String> keywordCategories = resolveKeywordCategories(productRows, myCategoryResults);
-        Map<Integer, List<String>> repeatedPhrases = similarProductRepeatedPhraseExtractor.extract(
+        Map<Integer, List<GeneratedKeyword>> keywordsByRow = productKeywordGenerator.generate(
                 productRows.stream()
-                        .map(productRow -> new ProductSource(
+                        .map(productRow -> new ProductKeywordSource(
                                 productRow.rowId(),
                                 productRow.productName(),
                                 keywordCategories.get(productRow.rowId())
                         ))
-                        .toList()
+                        .toList(),
+                resolvedKeywordCount
         );
         List<KeywordDetailEntry> keywordDetails = writeProductResultRows(
                 productRows,
                 myCategoryResults,
                 keywordCategories,
-                repeatedPhrases,
-                resolvedKeywordCount,
+                keywordsByRow,
                 sheetContext,
                 includeSelectionDetails
         );
@@ -303,8 +274,7 @@ public class ProductExcelProcessingService {
             List<ProductExcelRow> productRows,
             Map<Integer, MyCategoryMatchResult> myCategoryResults,
             Map<Integer, String> keywordCategories,
-            Map<Integer, List<String>> repeatedPhrases,
-            int resolvedKeywordCount,
+            Map<Integer, List<GeneratedKeyword>> keywordsByRow,
             ProductExcelSheetContext sheetContext,
             boolean includeSelectionDetails
     ) {
@@ -320,12 +290,7 @@ public class ProductExcelProcessingService {
             );
             String myCategory = resolveMyCategory(myCategoryResult);
             String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
-            List<GeneratedKeyword> keywords = generateKeywords(
-                    productName,
-                    keywordCategory,
-                    repeatedPhrases.getOrDefault(productRow.rowId(), List.of()),
-                    resolvedKeywordCount
-            );
+            List<GeneratedKeyword> keywords = keywordsByRow.getOrDefault(productRow.rowId(), List.of());
 
             row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
                     .map(keyword -> keyword.score().keyword())
@@ -648,151 +613,8 @@ public class ProductExcelProcessingService {
         );
     }
 
-    private List<GeneratedKeyword> generateKeywords(
-            String productName,
-            String category,
-            List<String> repeatedPhrases,
-            int keywordCount
-    ) {
-        List<String> productTokens = productNameTokenExtractor.extract(productName);
-        List<String> categoryTokens = categoryTokenExtractor.extract(category);
-        List<String> synonymSources = new ArrayList<>();
-        synonymSources.addAll(productTokens);
-        synonymSources.addAll(categoryTokens);
-        synonymSources.addAll(repeatedPhrases);
-        List<SynonymExpansion> synonymExpansions = keywordSynonymDictionary.findExpansions(synonymSources);
-        List<String> synonyms = synonymExpansions.stream()
-                .map(SynonymExpansion::keyword)
-                .toList();
-
-        List<String> candidates = keywordCombinationTemplate.generate(
-                productTokens,
-                categoryTokens,
-                repeatedPhrases,
-                synonyms
-        );
-        return keywordCandidateRanker.rank(
-                        candidates,
-                        productTokens,
-                        categoryTokens,
-                        repeatedPhrases,
-                        synonyms
-                ).stream()
-                .limit(keywordCount)
-                .map(score -> new GeneratedKeyword(
-                        score,
-                        resolveKeywordReasons(
-                                score.keyword(),
-                                productTokens,
-                                categoryTokens,
-                                repeatedPhrases,
-                                synonymExpansions
-                        )
-                ))
-                .toList();
-    }
-
-    private List<String> resolveKeywordReasons(
-            String keyword,
-            List<String> productTokens,
-            List<String> categoryTokens,
-            List<String> repeatedPhrases,
-            List<SynonymExpansion> synonymExpansions
-    ) {
-        Set<String> reasons = new LinkedHashSet<>();
-        if (containsKeyword(categoryTokens, keyword)) {
-            reasons.add("카테고리 핵심어");
-        }
-        if (containsKeyword(repeatedPhrases, keyword)) {
-            reasons.add("유사상품 반복 표현");
-        }
-        synonymExpansions.stream()
-                .filter(expansion -> sameKeyword(expansion.keyword(), keyword))
-                .map(expansion -> "동의어 치환: " + expansion.sourceTerm() + " → " + expansion.keyword())
-                .forEach(reasons::add);
-        if (containsKeyword(productTokens, keyword)) {
-            reasons.add("상품명 토큰");
-        }
-        if (isProductTokenCombination(keyword, productTokens)) {
-            reasons.add("상품명 토큰 조합");
-        }
-        if (isProductCategoryCombination(keyword, productTokens, categoryTokens)) {
-            reasons.add("상품명 + 카테고리 조합");
-        }
-        if (reasons.isEmpty()) {
-            reasons.add("조합 템플릿");
-        }
-        return List.copyOf(reasons);
-    }
-
-    private boolean containsKeyword(List<String> values, String keyword) {
-        return values.stream().anyMatch(value -> sameKeyword(value, keyword));
-    }
-
-    private boolean isProductTokenCombination(String keyword, List<String> productTokens) {
-        if (productTokens.size() >= 2 && sameKeyword(String.join("", productTokens), keyword)) {
-            return true;
-        }
-        for (int index = 0; index + 1 < productTokens.size(); index++) {
-            if (sameKeyword(productTokens.get(index) + productTokens.get(index + 1), keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isProductCategoryCombination(
-            String keyword,
-            List<String> productTokens,
-            List<String> categoryTokens
-    ) {
-        if (categoryTokens.isEmpty()) {
-            return false;
-        }
-        String primaryCategory = categoryTokens.getFirst();
-        for (int index = 0; index < productTokens.size(); index++) {
-            if (sameKeyword(combineWithCategory(List.of(productTokens.get(index)), primaryCategory), keyword)) {
-                return true;
-            }
-            if (index + 1 < productTokens.size()
-                    && sameKeyword(
-                    combineWithCategory(productTokens.subList(index, index + 2), primaryCategory),
-                    keyword
-            )) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String combineWithCategory(List<String> tokens, String category) {
-        StringBuilder prefix = new StringBuilder();
-        String normalizedCategory = normalizeKeyword(category);
-        for (String token : tokens) {
-            String normalizedToken = normalizeKeyword(token);
-            if (!normalizedCategory.contains(normalizedToken) && !normalizedToken.contains(normalizedCategory)) {
-                prefix.append(token);
-            }
-        }
-        return prefix.isEmpty() ? category : prefix + category;
-    }
-
-    private boolean sameKeyword(String first, String second) {
-        return normalizeKeyword(first).equals(normalizeKeyword(second));
-    }
-
-    private String normalizeKeyword(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-    }
-
     private String removeKeywordSpaces(String value) {
         return value == null ? "" : value.replaceAll("\\s+", "");
-    }
-
-    private record GeneratedKeyword(
-            ScoredKeyword score,
-            List<String> reasons
-    ) {
     }
     private String buildDownloadFilename(String originalFilename) {
         String baseName = originalFilename == null || originalFilename.isBlank()

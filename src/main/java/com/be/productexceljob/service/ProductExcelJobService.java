@@ -83,14 +83,16 @@ public class ProductExcelJobService {
         job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
             ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job);
-            ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
-                    job.getUploadedFilePath(),
-                    job.getOriginalFilename(),
-                    PRODUCT_NAME_COLUMN,
-                    "",
-                    KEYWORD_COUNT,
-                    job.getUserId(),
-                    job.isIncludeSelectionDetails(),
+            ExcelDownloadResult result = productExcelProcessingService.processExcel(
+                    new ProductExcelProcessingRequest(
+                            job.getUploadedFilePath(),
+                            job.getOriginalFilename(),
+                            PRODUCT_NAME_COLUMN,
+                            "",
+                            KEYWORD_COUNT,
+                            job.getUserId(),
+                            job.isIncludeSelectionDetails()
+                    ),
                     progressUpdater
             );
             job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
