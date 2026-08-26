@@ -41,28 +41,25 @@ public class CategoryMatcherService {
         }
 
         Map<Integer, MyCategoryMatchResult> defaultResults = createDefaultResults(products);
+
         if (userId == null) {
             return defaultResults;
         }
 
-        Optional<ActiveNaverCategories> activeCategories = loadActiveNaverCategories();
-        if (activeCategories.isEmpty()) {
+        Optional<ActiveNaverCategoryIndex> activeCategoryIndex = loadActiveNaverCategoryIndex();
+        if (activeCategoryIndex.isEmpty()) {
             return defaultResults;
         }
 
         // AI 카테고리 예측
+        ActiveNaverCategoryIndex categoryIndex = activeCategoryIndex.get();
         Map<Integer, CategoryMatchPrediction> predictions = predictBatchByAi(
-                activeCategories.get().versionId(),
+                categoryIndex.versionId(),
                 products
         );
-
-        List<NaverCategory> categories = activeCategories.get().categories(); //현재 활성 네이버 카테고리 목록
-        Map<Long, NaverCategory> categoriesById = mapCategoriesById(categories); //id 기준 빠른 조회 Map
-        
         Map<Integer, NaverCategory> matchedCategoriesByRowId = resolveMatchedCategoriesByRowId(
                 predictions,
-                categories,
-                categoriesById
+                categoryIndex
         );
         Map<String, MyCategoryMapping> mappingsByNaverCategoryCode = loadMappingsByNaverCategoryCode(
                 userId,
@@ -105,6 +102,7 @@ public class CategoryMatcherService {
         return toPredictionMap(predictions);
     }
 
+    //모든 상품 행의 기본 결과를 매칭 없음으로 만들어두는 메서드
     private Map<Integer, MyCategoryMatchResult> createDefaultResults(List<CategoryMatchProductRequest> products) {
         return products.stream()
                 .collect(Collectors.toMap(
@@ -115,9 +113,9 @@ public class CategoryMatcherService {
                 ));
     }
 
-    private Optional<ActiveNaverCategories> loadActiveNaverCategories() {
+    private Optional<ActiveNaverCategoryIndex> loadActiveNaverCategoryIndex() {
         return naverCategoryVersionRepository.findFirstByActiveTrueOrderByUploadedAtDesc()
-                .map(version -> new ActiveNaverCategories(
+                .map(version -> ActiveNaverCategoryIndex.from(
                         version.getId(),
                         naverCategoryRepository.findByVersionId(version.getId())
                 ));
@@ -128,16 +126,6 @@ public class CategoryMatcherService {
                 .collect(Collectors.toMap(
                         CategoryMatchPrediction::rowId,
                         Function.identity(),
-                        (first, second) -> first,
-                        HashMap::new
-                ));
-    }
-
-    private Map<Long, NaverCategory> mapCategoriesById(List<NaverCategory> categories) {
-        return categories.stream()
-                .collect(Collectors.toMap(
-                        NaverCategory::getId,
-                        category -> category,
                         (first, second) -> first,
                         HashMap::new
                 ));
@@ -200,29 +188,14 @@ public class CategoryMatcherService {
 
     private Map<Integer, NaverCategory> resolveMatchedCategoriesByRowId(
             Map<Integer, CategoryMatchPrediction> predictions,
-            List<NaverCategory> categories,
-            Map<Long, NaverCategory> categoriesById
+            ActiveNaverCategoryIndex categoryIndex
     ) {
         Map<Integer, NaverCategory> matchedCategories = new HashMap<>();
         for (CategoryMatchPrediction prediction : predictions.values()) {
-            resolveMatchedCategory(prediction, categories, categoriesById)
+            categoryIndex.find(prediction)
                     .ifPresent(category -> matchedCategories.put(prediction.rowId(), category));
         }
         return matchedCategories;
-    }
-
-    private Optional<NaverCategory> resolveMatchedCategory(
-            CategoryMatchPrediction prediction,
-            List<NaverCategory> categories,
-            Map<Long, NaverCategory> categoriesById
-    ) {
-        if (prediction.categoryId() != null) {
-            NaverCategory category = categoriesById.get(prediction.categoryId());
-            if (category != null) {
-                return Optional.of(category);
-            }
-        }
-        return findCategoryFromPrediction(categories, prediction);
     }
 
     private Map<String, MyCategoryMapping> loadMappingsByNaverCategoryCode(
@@ -250,34 +223,49 @@ public class CategoryMatcherService {
                 ));
     }
 
-    private Optional<NaverCategory> findCategoryFromPrediction(List<NaverCategory> categories, CategoryMatchPrediction prediction) {
-        return categories.stream()
-                .filter(category -> matchesPrediction(category, prediction))
-                .findFirst();
-    }
+    private record ActiveNaverCategoryIndex(
+            Long versionId,
+            Map<Long, NaverCategory> categoriesById,
+            Map<String, NaverCategory> categoriesByCode,
+            Map<String, NaverCategory> categoriesByFullPath
+    ) {
+        private static ActiveNaverCategoryIndex from(Long versionId, List<NaverCategory> categories) {
+            Map<Long, NaverCategory> categoriesById = new HashMap<>();
+            Map<String, NaverCategory> categoriesByCode = new HashMap<>();
+            Map<String, NaverCategory> categoriesByFullPath = new HashMap<>();
 
-    private boolean matchesPrediction(NaverCategory category, CategoryMatchPrediction prediction) {
-        return matchesCategoryId(category, prediction)
-                || matchesCategoryCode(category, prediction)
-                || matchesFullPath(category, prediction);
-    }
+            for (NaverCategory category : categories) {
+                if (category.getId() != null) {
+                    categoriesById.putIfAbsent(category.getId(), category);
+                }
+                if (category.getCategoryCode() != null && !category.getCategoryCode().isBlank()) {
+                    categoriesByCode.putIfAbsent(category.getCategoryCode(), category);
+                }
+                if (category.getFullPath() != null && !category.getFullPath().isBlank()) {
+                    categoriesByFullPath.putIfAbsent(category.getFullPath(), category);
+                }
+            }
 
-    private boolean matchesCategoryId(NaverCategory category, CategoryMatchPrediction prediction) {
-        return prediction.categoryId() != null
-                && prediction.categoryId().equals(category.getId());
-    }
+            return new ActiveNaverCategoryIndex(
+                    versionId,
+                    Map.copyOf(categoriesById),
+                    Map.copyOf(categoriesByCode),
+                    Map.copyOf(categoriesByFullPath)
+            );
+        }
 
-    private boolean matchesCategoryCode(NaverCategory category, CategoryMatchPrediction prediction) {
-        return prediction.categoryCode() != null
-                && prediction.categoryCode().equals(category.getCategoryCode());
-    }
-
-    private boolean matchesFullPath(NaverCategory category, CategoryMatchPrediction prediction) {
-        return prediction.fullPath() != null
-                && prediction.fullPath().equals(category.getFullPath());
-    }
-
-    private record ActiveNaverCategories(Long versionId, List<NaverCategory> categories) {
+        private Optional<NaverCategory> find(CategoryMatchPrediction prediction) {
+            NaverCategory category = prediction.categoryId() == null
+                    ? null
+                    : categoriesById.get(prediction.categoryId());
+            if (category == null && prediction.categoryCode() != null) {
+                category = categoriesByCode.get(prediction.categoryCode());
+            }
+            if (category == null && prediction.fullPath() != null) {
+                category = categoriesByFullPath.get(prediction.fullPath());
+            }
+            return Optional.ofNullable(category);
+        }
     }
 
 }
