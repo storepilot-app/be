@@ -37,7 +37,7 @@ public class ProductExcelJobService {
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
 
-    public ProductExcelJobCreateResponse create(MultipartFile file, Long userId, boolean includeSelectionDetails) {
+    public ProductExcelJobCreateResponse createExcelJob(MultipartFile file, Long userId, boolean includeSelectionDetails) {
         validateUserId(userId);
         productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
 
@@ -60,17 +60,17 @@ public class ProductExcelJobService {
                 targetPath,
                 includeSelectionDetails
         ));
-        productExcelJobExecutor.execute(() -> process(job)); //process(job)을 지금 요청 스레드에서 바로 실행하지 말고 productExcelJobExecutor가 관리하는 백그라운드 스레드에서 실행
+        productExcelJobExecutor.execute(() -> processExcelJob(job)); // 작업을 요청 스레드가 아닌 전용 Executor에서 실행
         return ProductExcelJobCreateResponse.from(job);
     }
 
-    public ProductExcelJobStatusResponse status(long jobId, Long userId) {
-        ProductExcelJob job = findJob(jobId, userId);
+    public ProductExcelJobStatusResponse getExcelJobStatus(long jobId, Long userId) {
+        ProductExcelJob job = findExcelJob(jobId, userId);
         return ProductExcelJobStatusResponse.from(job);
     }
 
-    public ExcelDownloadResult download(long jobId, Long userId) {
-        ProductExcelJob job = findJob(jobId, userId);
+    public ExcelDownloadResult getExcelDownloadResult(long jobId, Long userId) {
+        ProductExcelJob job = findExcelJob(jobId, userId);
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
                 || job.getResultFilename() == null
                 || job.getResultContent() == null) {
@@ -79,18 +79,21 @@ public class ProductExcelJobService {
         return new ExcelDownloadResult(job.getResultFilename(), job.getResultContent());
     }
 
-    private void process(ProductExcelJob job) {
+    private void processExcelJob(ProductExcelJob job) {
         job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
-            ExcelDownloadResult result = productExcelProcessingService.fillAndDownload(
-                    job.getUploadedFilePath(),
-                    job.getOriginalFilename(),
-                    PRODUCT_NAME_COLUMN,
-                    "",
-                    KEYWORD_COUNT,
-                    job.getUserId(),
-                    job.isIncludeSelectionDetails(),
-                    progressCallback(job)
+            ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job);
+            ExcelDownloadResult result = productExcelProcessingService.processExcel(
+                    new ProductExcelProcessingRequest(
+                            job.getUploadedFilePath(),
+                            job.getOriginalFilename(),
+                            PRODUCT_NAME_COLUMN,
+                            "",
+                            KEYWORD_COUNT,
+                            job.getUserId(),
+                            job.isIncludeSelectionDetails()
+                    ),
+                    progressUpdater
             );
             job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
         } catch (Exception error) {
@@ -103,26 +106,7 @@ public class ProductExcelJobService {
         }
     }
 
-    private ProductExcelProgressCallback progressCallback(ProductExcelJob job) {
-        return new ProductExcelProgressCallback() {
-            @Override
-            public void onProgress(int processedCount, int totalCount, String stage) {
-                job.updateProgress(processedCount, totalCount, stage);
-            }
-
-            @Override
-            public void onCategoryCompleted(long elapsedMillis) {
-                job.recordCategoryElapsed(elapsedMillis);
-            }
-
-            @Override
-            public void onKeywordCompleted(long elapsedMillis) {
-                job.recordKeywordElapsed(elapsedMillis);
-            }
-        };
-    }
-
-    private ProductExcelJob findJob(long jobId, Long userId) {
+    private ProductExcelJob findExcelJob(long jobId, Long userId) {
         return productExcelJobRepository.findByIdAndUserId(jobId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
     }
