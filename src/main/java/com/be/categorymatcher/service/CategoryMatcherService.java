@@ -20,42 +20,63 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CategoryMatcherService {
     private final CategoryMatcherAiClient categoryMatcherAiClient;
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
     private final MyCategoryMappingRepository myCategoryMappingRepository;
 
+    @Value("${storepilot.category.batch-size:300}")
+    private int categoryBatchSize;
+
     public Map<Integer, MyCategoryMatchResult> findCategoryMatches(
             List<CategoryMatchProductRequest> products,
             Long userId
+    ) {
+        return findCategoryMatches(products, userId, ignored -> {
+        });
+    }
+
+    public Map<Integer, MyCategoryMatchResult> findCategoryMatches(
+            List<CategoryMatchProductRequest> products,
+            Long userId,
+            IntConsumer batchProgress
     ) {
         if (products == null || products.isEmpty()) {
             return Collections.emptyMap();
         }
 
+        IntConsumer progress = batchProgress == null ? ignored -> {
+        } : batchProgress;
         Map<Integer, MyCategoryMatchResult> defaultResults = createDefaultResults(products);
 
         if (userId == null) {
+            progress.accept(products.size());
             return defaultResults;
         }
 
         Optional<ActiveNaverCategoryIndex> activeCategoryIndex = loadActiveNaverCategoryIndex();
         if (activeCategoryIndex.isEmpty()) {
+            progress.accept(products.size());
             return defaultResults;
         }
 
         // AI 카테고리 예측
         ActiveNaverCategoryIndex categoryIndex = activeCategoryIndex.get();
-        Map<Integer, CategoryMatchPrediction> predictions = predictBatchByAi(
+        Map<Integer, CategoryMatchPrediction> predictions = predictAllBatchesByAi(
                 categoryIndex.versionId(),
-                products
+                products,
+                progress
         );
         Map<Integer, NaverCategory> matchedCategoriesByRowId = resolveMatchedCategoriesByRowId(
                 predictions,
@@ -85,6 +106,41 @@ public class CategoryMatcherService {
         return results;
     }
 
+    private Map<Integer, CategoryMatchPrediction> predictAllBatchesByAi(
+            Long versionId,
+            List<CategoryMatchProductRequest> products,
+            IntConsumer batchProgress
+    ) {
+        Map<Integer, CategoryMatchPrediction> predictions = new HashMap<>();
+        int totalCount = products.size();
+        int safeBatchSize = Math.max(1, categoryBatchSize);
+        int batchNumber = 0;
+        long allBatchesStartedAt = System.nanoTime();
+
+        for (int start = 0; start < totalCount; start += safeBatchSize) {
+            batchNumber++;
+            int end = Math.min(start + safeBatchSize, totalCount);
+            long batchStartedAt = System.nanoTime();
+            predictions.putAll(predictBatchByAi(versionId, products.subList(start, end)));
+            log.info(
+                    "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
+                    batchNumber,
+                    end - start,
+                    end,
+                    totalCount,
+                    elapsedMillis(batchStartedAt)
+            );
+            batchProgress.accept(end);
+        }
+        log.info(
+                "category_all_batches_timing batches={} products={} elapsedMs={}",
+                batchNumber,
+                totalCount,
+                elapsedMillis(allBatchesStartedAt)
+        );
+        return predictions;
+    }
+
     private Map<Integer, CategoryMatchPrediction> predictBatchByAi(
             Long versionId,
             List<CategoryMatchProductRequest> products
@@ -100,6 +156,10 @@ public class CategoryMatcherService {
         }
 
         return toPredictionMap(predictions);
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
     }
 
     //모든 상품 행의 기본 결과를 매칭 없음으로 만들어두는 메서드

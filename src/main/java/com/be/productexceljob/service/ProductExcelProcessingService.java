@@ -23,22 +23,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ProductExcelProcessingService {
     private final CategoryMatcherService categoryMatcherService;
     private final ProductExcelSheetProcessor productExcelSheetProcessor;
     private final ProductKeywordGenerator productKeywordGenerator;
-
-    @Value("${storepilot.category.batch-size:300}")
-    private int categoryBatchSize;
 
     ExcelDownloadResult processExcel(
             ProductExcelProcessingRequest request,
@@ -108,42 +102,6 @@ public class ProductExcelProcessingService {
         }
     }
 
-    private Map<Integer, MyCategoryMatchResult> findCategoriesInBatches(
-            List<CategoryMatchProductRequest> products,
-            Long userId,
-            ProductExcelJobProgressUpdater progressUpdater
-    ) {
-        Map<Integer, MyCategoryMatchResult> results = new HashMap<>();
-        int totalCount = products.size();
-        progressUpdater.update(0, totalCount, "카테고리 검색 준비 중");
-
-        long allBatchesStartedAt = System.nanoTime();
-        int batchNumber = 0;
-        int safeBatchSize = Math.max(1, categoryBatchSize);
-        for (int start = 0; start < totalCount; start += safeBatchSize) {
-            batchNumber++;
-            int end = Math.min(start + safeBatchSize, totalCount);
-            long batchStartedAt = System.nanoTime();
-            results.putAll(categoryMatcherService.findCategoryMatches(products.subList(start, end), userId));
-            log.info(
-                    "category_batch_timing batch={} batchSize={} processed={} total={} elapsedMs={}",
-                    batchNumber,
-                    end - start,
-                    end,
-                    totalCount,
-                    elapsedMillis(batchStartedAt)
-            );
-            progressUpdater.update(end, totalCount, "카테고리 찾는 중");
-        }
-        log.info(
-                "category_all_batches_timing batches={} products={} elapsedMs={}",
-                batchNumber,
-                totalCount,
-                elapsedMillis(allBatchesStartedAt)
-        );
-        return results;
-    }
-
     private Map<Integer, MyCategoryMatchResult> matchCategories(
             List<ProductExcelRow> productRows,
             Long userId,
@@ -152,11 +110,13 @@ public class ProductExcelProcessingService {
         List<CategoryMatchProductRequest> products = productRows.stream()
                 .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
                 .toList();
+        int totalCount = products.size();
+        progressUpdater.update(0, totalCount, "카테고리 검색 준비 중");
         long categoryStartedAt = System.nanoTime();
-        Map<Integer, MyCategoryMatchResult> myCategoryResults = findCategoriesInBatches(
+        Map<Integer, MyCategoryMatchResult> myCategoryResults = categoryMatcherService.findCategoryMatches(
                 products,
                 userId,
-                progressUpdater
+                processedCount -> progressUpdater.update(processedCount, totalCount, "카테고리 찾는 중")
         );
         progressUpdater.recordCategoryCompleted(elapsedMillis(categoryStartedAt));
         return myCategoryResults;
