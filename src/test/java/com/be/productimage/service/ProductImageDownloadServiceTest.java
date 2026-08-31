@@ -1,8 +1,10 @@
-package com.be.productexceljob.service;
+package com.be.productimage.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.be.productexceljob.dto.ProductImageDownloadPrepareResponse;
+import com.be.productimage.dto.ProductImageDownloadPrepareResponse;
+import com.be.productimage.excel.ProductImageDownloadExcelReader;
+import com.be.productimage.validation.RemoteImageUrlValidator;
 import java.io.ByteArrayOutputStream;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -12,7 +14,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 class ProductImageDownloadServiceTest {
-    private final ProductImageDownloadService service = new ProductImageDownloadService(null);
+    private final ProductImageDownloadService service = new ProductImageDownloadService(
+            new ProductImageDownloadExcelReader(new RemoteImageUrlValidator()),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+    );
 
     @Test
     void preparesValidImagesAndReportsInvalidRows() throws Exception {

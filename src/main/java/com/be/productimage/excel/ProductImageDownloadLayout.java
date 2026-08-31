@@ -1,4 +1,4 @@
-package com.be.productexceljob.excel;
+package com.be.productimage.excel;
 
 public final class ProductImageDownloadLayout {
     public static final String IMAGE_URL_COLUMN = "목록이미지1";

@@ -1,4 +1,4 @@
-package com.be.productexceljob.dto;
+package com.be.productimage.dto;
 
 import java.util.List;
 
