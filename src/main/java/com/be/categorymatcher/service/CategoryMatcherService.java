@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class CategoryMatcherService {
+    private static final int MAX_CATEGORY_CANDIDATES = 10;
+
     private final CategoryPredictionBatchProcessor categoryPredictionBatchProcessor;
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
@@ -117,7 +119,7 @@ public class CategoryMatcherService {
         }
         return prediction.candidates().stream()
                 .filter(candidate -> candidate.fullPath() != null && !candidate.fullPath().isBlank())
-                .limit(10)
+                .limit(MAX_CATEGORY_CANDIDATES)
                 .toList();
     }
 
