@@ -33,6 +33,7 @@ class CategoryMatcherServiceTest {
     private NaverCategoryRepository naverCategoryRepository;
     private NaverCategoryVersionRepository naverCategoryVersionRepository;
     private MyCategoryMappingRepository myCategoryMappingRepository;
+    private CategoryPredictionBatchProcessor categoryPredictionBatchProcessor;
     private CategoryMatcherService categoryMatcherService;
 
     @BeforeEach
@@ -41,13 +42,14 @@ class CategoryMatcherServiceTest {
         naverCategoryRepository = mock(NaverCategoryRepository.class);
         naverCategoryVersionRepository = mock(NaverCategoryVersionRepository.class);
         myCategoryMappingRepository = mock(MyCategoryMappingRepository.class);
+        categoryPredictionBatchProcessor = new CategoryPredictionBatchProcessor(categoryMatcherAiClient);
+        ReflectionTestUtils.setField(categoryPredictionBatchProcessor, "batchSize", 2);
         categoryMatcherService = new CategoryMatcherService(
-                categoryMatcherAiClient,
+                categoryPredictionBatchProcessor,
                 naverCategoryRepository,
                 naverCategoryVersionRepository,
                 myCategoryMappingRepository
         );
-        ReflectionTestUtils.setField(categoryMatcherService, "categoryBatchSize", 2);
     }
 
     @Test

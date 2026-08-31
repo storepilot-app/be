@@ -1,4 +1,4 @@
-package com.be.productexceljob.dto;
+package com.be.productimage.dto;
 
 public record ProductImageDownloadItem(
         int rowNumber,
