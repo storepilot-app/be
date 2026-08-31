@@ -41,14 +41,6 @@ public class CategoryMatcherService {
 
     public Map<Integer, MyCategoryMatchResult> findCategoryMatches(
             List<CategoryMatchProductRequest> products,
-            Long userId
-    ) {
-        return findCategoryMatches(products, userId, ignored -> {
-        });
-    }
-
-    public Map<Integer, MyCategoryMatchResult> findCategoryMatches(
-            List<CategoryMatchProductRequest> products,
             Long userId,
             IntConsumer batchProgress
     ) {
