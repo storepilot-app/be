@@ -58,7 +58,7 @@ public class RemoteImageClient {
     private void validateResponse(HttpResponse<?> response) throws IOException {
         int statusCode = response.statusCode();
         if (statusCode < 200 || statusCode >= 300) {
-            throw new IOException("이미지 요청에 실패했습니다. HTTP 상태: " + statusCode);
+            throw new IOException(responseFailureMessage(statusCode));
         }
 
         long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
@@ -87,5 +87,17 @@ public class RemoteImageClient {
                 || statusCode == 303
                 || statusCode == 307
                 || statusCode == 308;
+    }
+
+    private String responseFailureMessage(int statusCode) {
+        return switch (statusCode) {
+            case 404 -> "원본 이미지를 찾을 수 없습니다. 이미지가 삭제되었거나 URL이 변경되었는지 확인해주세요. (HTTP 404)";
+            case 401, 403 -> "이미지 서버가 접근을 허용하지 않습니다. 로그인이 필요한 이미지이거나 외부 다운로드가 차단된 주소입니다. (HTTP "
+                    + statusCode + ")";
+            case 429 -> "이미지 서버 요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (HTTP 429)";
+            default -> statusCode >= 500
+                    ? "이미지 서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요. (HTTP " + statusCode + ")"
+                    : "이미지를 다운로드하지 못했습니다. 이미지 URL을 확인해주세요. (HTTP " + statusCode + ")";
+        };
     }
 }
