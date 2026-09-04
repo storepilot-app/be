@@ -2,6 +2,8 @@ package com.be.trainingproductrequest.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -42,8 +44,15 @@ public class TrainingProductRequest {
     @Column(name = "product_count", nullable = false)
     private int productCount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30, columnDefinition = "varchar(30) default 'RECEIVED'")
+    private TrainingProductRequestStatus status;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "file_deleted_at")
+    private Instant fileDeletedAt;
 
     private TrainingProductRequest(
             Long userId,
@@ -59,6 +68,7 @@ public class TrainingProductRequest {
         this.storedFilename = storedFilename;
         this.fileSize = fileSize;
         this.productCount = productCount;
+        this.status = TrainingProductRequestStatus.RECEIVED;
         this.createdAt = Instant.now();
     }
 
@@ -78,5 +88,14 @@ public class TrainingProductRequest {
                 fileSize,
                 productCount
         );
+    }
+
+    public void updateStatus(TrainingProductRequestStatus status) {
+        this.status = status;
+    }
+
+    public void markFileDeleted() {
+        this.fileDeletedAt = Instant.now();
+        this.status = TrainingProductRequestStatus.COMPLETED;
     }
 }

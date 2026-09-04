@@ -1,6 +1,7 @@
 package com.be.trainingproductrequest.dto;
 
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
+import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 
@@ -12,6 +13,8 @@ public record TrainingProductRequestResponse(
         String originalFilename,
         long fileSize,
         int productCount,
+        TrainingProductRequestStatus status,
+        boolean fileAvailable,
         Instant createdAt
 ) {
     public static TrainingProductRequestResponse from(TrainingProductRequest request) {
@@ -22,6 +25,8 @@ public record TrainingProductRequestResponse(
                 request.getOriginalFilename(),
                 request.getFileSize(),
                 request.getProductCount(),
+                request.getStatus(),
+                request.getFileDeletedAt() == null,
                 request.getCreatedAt()
         );
     }

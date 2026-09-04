@@ -3,6 +3,7 @@ package com.be.trainingproductrequest.service;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
+import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.dto.TrainingProductRequestFile;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
 import java.io.ByteArrayInputStream;
@@ -79,14 +80,47 @@ public class TrainingProductRequestService {
     }
 
     public TrainingProductRequestFile getRequestFile(Long requestId) {
-        TrainingProductRequest request = trainingProductRequestRepository.findById(requestId)
-                .orElseThrow(() -> invalid("학습 요청을 찾을 수 없습니다."));
+        TrainingProductRequest request = getRequest(requestId);
+        if (request.getFileDeletedAt() != null) {
+            throw invalid("이미 삭제된 학습 요청 파일입니다.");
+        }
         try {
             byte[] content = Files.readAllBytes(requestDirectory().resolve(request.getStoredFilename()));
             return new TrainingProductRequestFile(request.getOriginalFilename(), content);
         } catch (IOException error) {
             throw invalid("학습 요청 파일을 읽지 못했습니다.");
         }
+    }
+
+    @Transactional
+    public TrainingProductRequest updateStatus(Long requestId, TrainingProductRequestStatus status) {
+        if (status == null) {
+            throw invalid("변경할 학습 요청 상태가 필요합니다.");
+        }
+        TrainingProductRequest request = getRequest(requestId);
+        if (request.getFileDeletedAt() != null && status != TrainingProductRequestStatus.COMPLETED) {
+            throw invalid("원본 파일이 삭제된 요청은 학습 완료 상태를 변경할 수 없습니다.");
+        }
+        request.updateStatus(status);
+        return request;
+    }
+
+    @Transactional
+    public TrainingProductRequest deleteRequestFile(Long requestId) {
+        TrainingProductRequest request = getRequest(requestId);
+        Path filePath = requestDirectory().resolve(request.getStoredFilename());
+        try {
+            Files.deleteIfExists(filePath);
+        } catch (IOException error) {
+            throw invalid("학습 요청 파일을 삭제하지 못했습니다.");
+        }
+        request.markFileDeleted();
+        return request;
+    }
+
+    private TrainingProductRequest getRequest(Long requestId) {
+        return trainingProductRequestRepository.findById(requestId)
+                .orElseThrow(() -> invalid("학습 요청을 찾을 수 없습니다."));
     }
 
     private void validateUser(Long userId, String userEmail) {

@@ -8,9 +8,11 @@ import static org.mockito.Mockito.when;
 
 import com.be.global.exception.BusinessException;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
+import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
+import java.util.Optional;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,13 +22,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class TrainingProductRequestServiceTest {
     private TrainingProductRequestService service;
+    private TrainingProductRequestRepository repository;
 
     @TempDir
     Path tempDirectory;
 
     @BeforeEach
     void setUp() {
-        TrainingProductRequestRepository repository = mock(TrainingProductRequestRepository.class);
+        repository = mock(TrainingProductRequestRepository.class);
         when(repository.save(any(TrainingProductRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
         service = new TrainingProductRequestService(repository);
         ReflectionTestUtils.setField(service, "uploadDir", tempDirectory.toString());
@@ -40,7 +43,39 @@ class TrainingProductRequestServiceTest {
 
         assertThat(request.getOriginalFilename()).isEqualTo("products.xlsx");
         assertThat(request.getProductCount()).isEqualTo(1);
+        assertThat(request.getStatus()).isEqualTo(TrainingProductRequestStatus.RECEIVED);
         assertThat(tempDirectory.resolve("training-product-requests").resolve(request.getStoredFilename())).exists();
+    }
+
+    @Test
+    void updatesRequestStatus() throws Exception {
+        TrainingProductRequest request = service.submit(
+                1L,
+                "user@example.com",
+                excelFile("상품명", "마이카테", "린넨 셔츠", "A001")
+        );
+        when(repository.findById(10L)).thenReturn(Optional.of(request));
+
+        TrainingProductRequest updated = service.updateStatus(10L, TrainingProductRequestStatus.REVIEWING);
+
+        assertThat(updated.getStatus()).isEqualTo(TrainingProductRequestStatus.REVIEWING);
+    }
+
+    @Test
+    void deletesStoredFileAndKeepsCompletedRequest() throws Exception {
+        TrainingProductRequest request = service.submit(
+                1L,
+                "user@example.com",
+                excelFile("상품명", "마이카테", "린넨 셔츠", "A001")
+        );
+        Path storedFile = tempDirectory.resolve("training-product-requests").resolve(request.getStoredFilename());
+        when(repository.findById(10L)).thenReturn(Optional.of(request));
+
+        TrainingProductRequest updated = service.deleteRequestFile(10L);
+
+        assertThat(storedFile).doesNotExist();
+        assertThat(updated.getStatus()).isEqualTo(TrainingProductRequestStatus.COMPLETED);
+        assertThat(updated.getFileDeletedAt()).isNotNull();
     }
 
     @Test

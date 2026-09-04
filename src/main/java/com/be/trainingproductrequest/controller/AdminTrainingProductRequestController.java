@@ -3,6 +3,8 @@ package com.be.trainingproductrequest.controller;
 import com.be.global.response.CommonResponse;
 import com.be.trainingproductrequest.dto.TrainingProductRequestFile;
 import com.be.trainingproductrequest.dto.TrainingProductRequestListResponse;
+import com.be.trainingproductrequest.dto.TrainingProductRequestResponse;
+import com.be.trainingproductrequest.dto.TrainingProductRequestStatusUpdateRequest;
 import com.be.trainingproductrequest.service.TrainingProductRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +15,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -49,5 +54,28 @@ public class AdminTrainingProductRequestController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
                 .contentLength(file.content().length)
                 .body(new ByteArrayResource(file.content()));
+    }
+
+    @Operation(summary = "카테고리 학습 요청 상태 변경")
+    @PatchMapping(value = "/{requestId}/status", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public CommonResponse<TrainingProductRequestResponse> updateStatus(
+            @PathVariable Long requestId,
+            @RequestBody TrainingProductRequestStatusUpdateRequest request
+    ) {
+        return CommonResponse.success(
+                TrainingProductRequestResponse.from(
+                        trainingProductRequestService.updateStatus(requestId, request.status())
+                ),
+                "카테고리 학습 요청 상태가 변경되었습니다."
+        );
+    }
+
+    @Operation(summary = "카테고리 학습 요청 삭제")
+    @DeleteMapping("/{requestId}")
+    public CommonResponse<TrainingProductRequestResponse> delete(@PathVariable Long requestId) {
+        return CommonResponse.success(
+                TrainingProductRequestResponse.from(trainingProductRequestService.deleteRequestFile(requestId)),
+                "원본 파일이 삭제되고 학습 요청이 완료 처리되었습니다."
+        );
     }
 }
