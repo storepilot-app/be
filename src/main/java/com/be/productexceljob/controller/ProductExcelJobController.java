@@ -1,5 +1,6 @@
 package com.be.productexceljob.controller;
 
+import com.be.auth.domain.UserRole;
 import com.be.auth.security.LoginUser;
 import com.be.global.response.CommonResponse;
 import com.be.productexceljob.dto.ExcelDownloadResult;
@@ -41,10 +42,11 @@ public class ProductExcelJobController {
             @Parameter(description = "결과 엑셀에 선택 과정 확인용 열을 포함할지 여부")
             @RequestParam(value = "includeSelectionDetails", defaultValue = "true") boolean includeSelectionDetails
     ) {
+        boolean includeAdminSelectionDetails = loginUser.role() == UserRole.ADMIN && includeSelectionDetails;
         ProductExcelJobCreateResponse response = productExcelJobService.createExcelJob(
                 file,
                 loginUser.id(),
-                includeSelectionDetails
+                includeAdminSelectionDetails
         );
         return CommonResponse.success(response, response.message());
     }
