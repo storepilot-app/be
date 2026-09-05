@@ -35,31 +35,43 @@ public class TrainingProductController {
 
     @Operation(
             summary = "기존 상품 FAISS 인덱스 재생성",
-            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 공용 FAISS 상품 인덱스를 재생성합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+            description = "상품 엑셀의 상품명과 마이카테 열을 읽고, 함께 업로드한 마이카테고리 파일의 네이버 카테고리 매핑으로 공용 FAISS 상품 인덱스를 재생성합니다."
     )
     @PostMapping(value = "/rebuild", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexRebuildResponse> rebuild(
             @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
-            @RequestParam("files") List<MultipartFile> files
+            @RequestParam("files") List<MultipartFile> files,
+            @Parameter(description = "상품 파일의 마이카테를 네이버 카테고리로 연결할 매핑 엑셀 파일", required = true)
+            @RequestParam("myCategoryFile") MultipartFile myCategoryFile
     ) {
         requireAdmin(loginUser);
-        ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(loginUser.id(), files);
+        ProductIndexRebuildResponse response = trainingProductService.rebuildIndex(
+                loginUser.id(),
+                files,
+                myCategoryFile
+        );
         return CommonResponse.success(response, response.message());
     }
 
     @Operation(
             summary = "기존 상품 인덱스에 상품 추가",
-            description = "엑셀 헤더에서 상품명과 마이카테고리 열을 찾아 기존 상품 인덱스에 상품을 추가합니다. 여러 개의 .xlsx 파일을 업로드할 수 있습니다."
+            description = "상품 엑셀의 상품명과 마이카테 열을 읽고, 함께 업로드한 마이카테고리 파일의 네이버 카테고리 매핑으로 기존 상품 인덱스에 추가합니다."
     )
     @PostMapping(value = "/append", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResponse<ProductIndexAppendResponse> append(
             @AuthenticationPrincipal LoginUser loginUser,
             @Parameter(description = "추가할 기존 상품 데이터가 담긴 엑셀 파일 목록", required = true)
-            @RequestParam("files") List<MultipartFile> files
+            @RequestParam("files") List<MultipartFile> files,
+            @Parameter(description = "상품 파일의 마이카테를 네이버 카테고리로 연결할 매핑 엑셀 파일", required = true)
+            @RequestParam("myCategoryFile") MultipartFile myCategoryFile
     ) {
         requireAdmin(loginUser);
-        ProductIndexAppendResponse response = trainingProductService.appendProducts(loginUser.id(), files);
+        ProductIndexAppendResponse response = trainingProductService.appendProducts(
+                loginUser.id(),
+                files,
+                myCategoryFile
+        );
         return CommonResponse.success(response, response.message());
     }
 

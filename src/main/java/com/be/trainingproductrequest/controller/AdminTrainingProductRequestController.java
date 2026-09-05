@@ -45,6 +45,17 @@ public class AdminTrainingProductRequestController {
     @GetMapping("/{requestId}/download")
     public ResponseEntity<ByteArrayResource> download(@PathVariable Long requestId) {
         TrainingProductRequestFile file = trainingProductRequestService.getRequestFile(requestId);
+        return excelDownloadResponse(file);
+    }
+
+    @Operation(summary = "학습 요청자의 마이카테고리 파일 다운로드")
+    @GetMapping("/{requestId}/my-category-mappings/download")
+    public ResponseEntity<ByteArrayResource> downloadMyCategoryMappings(@PathVariable Long requestId) {
+        TrainingProductRequestFile file = trainingProductRequestService.getMyCategoryMappingFile(requestId);
+        return excelDownloadResponse(file);
+    }
+
+    private ResponseEntity<ByteArrayResource> excelDownloadResponse(TrainingProductRequestFile file) {
         String disposition = ContentDisposition.attachment()
                 .filename(file.filename(), java.nio.charset.StandardCharsets.UTF_8)
                 .build()

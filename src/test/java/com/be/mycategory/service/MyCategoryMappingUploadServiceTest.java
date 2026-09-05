@@ -91,6 +91,21 @@ class MyCategoryMappingUploadServiceTest {
     }
 
     @Test
+    void readsResolvedMappingsForTrainingWithoutSavingThem() throws IOException {
+        MockMultipartFile file = excelFile(
+                List.of("네이버카테", "마이카테"),
+                List.of("50000167", "MY-001")
+        );
+
+        List<MyCategoryMapping> mappings = service.readResolvedMappings(file, 1L);
+
+        assertEquals(1, mappings.size());
+        assertEquals("MY-001", mappings.getFirst().getMyCategoryCode());
+        assertEquals("50000167", mappings.getFirst().getNaverCategoryCode());
+        assertEquals(0, savedMappings.get().size());
+    }
+
+    @Test
     void rejectsExcelWhenRequiredHeaderIsMissing() throws IOException {
         MockMultipartFile file = excelFile(
                 List.of("마이카테", "다른열"),

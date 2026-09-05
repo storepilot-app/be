@@ -2,11 +2,14 @@ package com.be.trainingproductrequest.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.mycategory.domain.MyCategoryMapping;
+import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
 import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.dto.TrainingProductRequestFile;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +22,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +38,7 @@ public class TrainingProductRequestService {
     private static final List<String> MY_CATEGORY_HEADERS = List.of("마이카테", "마이카테고리", "마이카테고리코드");
 
     private final TrainingProductRequestRepository trainingProductRequestRepository;
+    private final MyCategoryMappingQueryService myCategoryMappingQueryService;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
@@ -89,6 +94,35 @@ public class TrainingProductRequestService {
             return new TrainingProductRequestFile(request.getOriginalFilename(), content);
         } catch (IOException error) {
             throw invalid("학습 요청 파일을 읽지 못했습니다.");
+        }
+    }
+
+    public TrainingProductRequestFile getMyCategoryMappingFile(Long requestId) {
+        TrainingProductRequest request = getRequest(requestId);
+        List<MyCategoryMapping> mappings = myCategoryMappingQueryService.getResolvedMappings(request.getUserId());
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("마이카테고리");
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue("마이카테");
+            headerRow.createCell(1).setCellValue("네이버카테");
+
+            for (int index = 0; index < mappings.size(); index++) {
+                MyCategoryMapping mapping = mappings.get(index);
+                Row row = sheet.createRow(index + 1);
+                row.createCell(0).setCellValue(mapping.getMyCategoryCode());
+                row.createCell(1).setCellValue(mapping.getNaverCategoryValue());
+            }
+            sheet.autoSizeColumn(0);
+            sheet.autoSizeColumn(1);
+            workbook.write(outputStream);
+            return new TrainingProductRequestFile(
+                    "my-category-mappings-" + request.getUserId() + ".xlsx",
+                    outputStream.toByteArray()
+            );
+        } catch (IOException error) {
+            throw invalid("요청자의 마이카테고리 파일을 생성하지 못했습니다.");
         }
     }
 

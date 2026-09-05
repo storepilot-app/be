@@ -7,12 +7,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.be.global.exception.BusinessException;
+import com.be.mycategory.domain.MyCategoryMapping;
+import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
 import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.List;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TrainingProductRequestServiceTest {
     private TrainingProductRequestService service;
     private TrainingProductRequestRepository repository;
+    private MyCategoryMappingQueryService myCategoryMappingQueryService;
 
     @TempDir
     Path tempDirectory;
@@ -30,8 +34,9 @@ class TrainingProductRequestServiceTest {
     @BeforeEach
     void setUp() {
         repository = mock(TrainingProductRequestRepository.class);
+        myCategoryMappingQueryService = mock(MyCategoryMappingQueryService.class);
         when(repository.save(any(TrainingProductRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        service = new TrainingProductRequestService(repository);
+        service = new TrainingProductRequestService(repository, myCategoryMappingQueryService);
         ReflectionTestUtils.setField(service, "uploadDir", tempDirectory.toString());
     }
 
@@ -76,6 +81,29 @@ class TrainingProductRequestServiceTest {
         assertThat(storedFile).doesNotExist();
         assertThat(updated.getStatus()).isEqualTo(TrainingProductRequestStatus.COMPLETED);
         assertThat(updated.getFileDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void createsMyCategoryMappingFileForRequestUser() throws Exception {
+        TrainingProductRequest request = service.submit(
+                1L,
+                "user@example.com",
+                excelFile("상품명", "마이카테", "린넨 셔츠", "A001")
+        );
+        when(repository.findById(10L)).thenReturn(Optional.of(request));
+        when(myCategoryMappingQueryService.getResolvedMappings(1L)).thenReturn(List.of(
+                MyCategoryMapping.create(1L, "A001", "50000123", 10L, "50000123", "패션의류>여성의류")
+        ));
+
+        var file = service.getMyCategoryMappingFile(10L);
+
+        try (var workbook = new XSSFWorkbook(new java.io.ByteArrayInputStream(file.content()))) {
+            var sheet = workbook.getSheetAt(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("마이카테");
+            assertThat(sheet.getRow(0).getCell(1).getStringCellValue()).isEqualTo("네이버카테");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("A001");
+            assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("50000123");
+        }
     }
 
     @Test

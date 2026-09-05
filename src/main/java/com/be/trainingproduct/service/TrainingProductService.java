@@ -4,6 +4,7 @@ import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.service.MyCategoryMappingQueryService;
+import com.be.mycategory.service.MyCategoryMappingUploadService;
 import com.be.trainingproduct.domain.ProductCategoryFeedback;
 import com.be.trainingproduct.domain.ProductCategoryStat;
 import com.be.trainingproduct.client.TrainingProductAiClient;
@@ -47,18 +48,26 @@ public class TrainingProductService {
 
     private final TrainingProductAiClient trainingProductAiClient;
     private final MyCategoryMappingQueryService myCategoryMappingQueryService;
+    private final MyCategoryMappingUploadService myCategoryMappingUploadService;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
     private final ProductCategoryStatService productCategoryStatService;
 
-    public ProductIndexRebuildResponse rebuildIndex(Long userId, List<MultipartFile> files) {
+    public ProductIndexRebuildResponse rebuildIndex(
+            Long userId,
+            List<MultipartFile> files,
+            MultipartFile myCategoryFile
+    ) {
         validateUserId(userId);
         validateFiles(files);
-        List<MyCategoryMapping> resolvedMappings = myCategoryMappingQueryService.getResolvedMappings(userId);
+        List<MyCategoryMapping> resolvedMappings = myCategoryMappingUploadService.readResolvedMappings(
+                myCategoryFile,
+                userId
+        );
         List<CategoryMatchMappingItem> mappings = resolvedMappings.stream()
                 .map(CategoryMatchMappingItem::from)
                 .toList();
         if (mappings.isEmpty()) {
-            throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
+            throw invalid("업로드한 마이카테고리 파일에 유효한 네이버 카테고리 매핑이 없습니다.");
         }
         List<ProductCategoryStat> stats = collectCategoryStats(userId, files, resolvedMappings);
         ProductIndexRebuildResponse response = trainingProductAiClient.rebuildProductIndex(userId, files, mappings);
@@ -71,12 +80,19 @@ public class TrainingProductService {
         return productCategoryStatService.getStats(userId);
     }
 
-    public ProductIndexAppendResponse appendProducts(Long userId, List<MultipartFile> files) {
+    public ProductIndexAppendResponse appendProducts(
+            Long userId,
+            List<MultipartFile> files,
+            MultipartFile myCategoryFile
+    ) {
         validateUserId(userId);
         validateFiles(files);
-        List<MyCategoryMapping> resolvedMappings = myCategoryMappingQueryService.getResolvedMappings(userId);
+        List<MyCategoryMapping> resolvedMappings = myCategoryMappingUploadService.readResolvedMappings(
+                myCategoryFile,
+                userId
+        );
         if (resolvedMappings.isEmpty()) {
-            throw invalid("활성화된 마이카테고리 매핑에 유효한 네이버 카테고리가 없습니다.");
+            throw invalid("업로드한 마이카테고리 파일에 유효한 네이버 카테고리 매핑이 없습니다.");
         }
 
         ProductAppendRows rows = collectProductAppendRows(files, resolvedMappings);

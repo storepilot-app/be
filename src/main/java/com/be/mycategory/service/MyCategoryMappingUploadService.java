@@ -41,6 +41,17 @@ public class MyCategoryMappingUploadService {
     private final NaverCategoryRepository naverCategoryRepository;
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
 
+    public List<MyCategoryMapping> readResolvedMappings(MultipartFile file, Long userId) {
+        validateFile(file);
+        validateUserId(userId);
+        Map<String, NaverCategory> naverCategoriesByCode = loadRequiredActiveNaverCategoriesByCode();
+        return parseMappings(file, userId, naverCategoriesByCode)
+                .mappings()
+                .stream()
+                .filter(mapping -> mapping.getNaverCategoryId() != null)
+                .toList();
+    }
+
     @Transactional
     public MyCategoryMappingVersion upload(MultipartFile file, Long userId) {
         validateFile(file);
