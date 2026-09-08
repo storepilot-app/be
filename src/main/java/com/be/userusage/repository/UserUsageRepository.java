@@ -11,6 +11,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserUsageRepository extends JpaRepository<UserUsage, Long> {
+    List<UserUsage> findByUserIdAndUsageDateBetweenOrderByUsageDateDesc(
+            Long userId,
+            LocalDate startDate,
+            LocalDate endDate
+    );
+
     @Query("""
             SELECT new com.be.userusage.dto.AdminUserUsageResponse(
                 user.id,
