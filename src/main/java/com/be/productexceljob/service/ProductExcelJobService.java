@@ -12,6 +12,7 @@ import com.be.userusage.service.UserUsageService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -41,29 +42,38 @@ public class ProductExcelJobService {
 
     public ProductExcelJobCreateResponse createExcelJob(MultipartFile file, Long userId, boolean includeSelectionDetails) {
         validateUserId(userId);
-        productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
+        int productCount = productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
+        LocalDate usageDate = userUsageService.reserveCategoryProducts(userId, productCount);
 
         long jobId = jobIdGenerator.getAndIncrement();
         String filename = safeFilename(file.getOriginalFilename());
         Path jobDirectory = uploadRoot().resolve("product-excel-jobs").resolve(String.valueOf(jobId));
         Path targetPath = jobDirectory.resolve(filename).normalize();
 
+        ProductExcelJob job;
         try {
             Files.createDirectories(jobDirectory);
             file.transferTo(targetPath);
+            job = productExcelJobRepository.save(ProductExcelJob.register(
+                    jobId,
+                    userId,
+                    filename,
+                    targetPath,
+                    includeSelectionDetails,
+                    productCount,
+                    usageDate
+            ));
+            productExcelJobExecutor.execute(() -> processExcelJob(job)); // 작업을 요청 스레드가 아닌 전용 Executor에서 실행
+            return ProductExcelJobCreateResponse.from(job);
         } catch (IOException error) {
+            releaseReservedProducts(userId, usageDate, productCount, jobId);
+            deleteUploadedFile(targetPath);
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "엑셀 파일을 저장하지 못했습니다.");
+        } catch (RuntimeException error) {
+            releaseReservedProducts(userId, usageDate, productCount, jobId);
+            deleteUploadedFile(targetPath);
+            throw error;
         }
-
-        ProductExcelJob job = productExcelJobRepository.save(ProductExcelJob.register(
-                jobId,
-                userId,
-                filename,
-                targetPath,
-                includeSelectionDetails
-        ));
-        productExcelJobExecutor.execute(() -> processExcelJob(job)); // 작업을 요청 스레드가 아닌 전용 Executor에서 실행
-        return ProductExcelJobCreateResponse.from(job);
     }
 
     public ProductExcelJobStatusResponse getExcelJobStatus(long jobId, Long userId) {
@@ -97,9 +107,14 @@ public class ProductExcelJobService {
                     ),
                     progressUpdater
             );
+            userUsageService.completeCategoryKeywordJob(
+                    job.getUserId(),
+                    job.getUsageDate(),
+                    job.getProductCount()
+            );
             job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
-            recordCompletedJobUsage(job);
         } catch (Exception error) {
+            releaseReservedProducts(job.getUserId(), job.getUsageDate(), job.getProductCount(), null);
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
@@ -109,12 +124,14 @@ public class ProductExcelJobService {
         }
     }
 
-    private void recordCompletedJobUsage(ProductExcelJob job) {
+    private void releaseReservedProducts(Long userId, LocalDate usageDate, int productCount, Long jobId) {
         try {
-            userUsageService.recordCategoryKeywordJob(job.getUserId(), job.getTotalCount());
+            userUsageService.releaseCategoryProducts(userId, usageDate, productCount);
         } catch (RuntimeException error) {
-            log.error("카테고리 및 키워드 작업 사용량 기록 실패: jobId={}, userId={}",
-                    job.getJobId(), job.getUserId(), error);
+            log.error("카테고리 및 키워드 작업 예약 사용량 반환 실패: jobId={}, userId={}", jobId, userId, error);
+        }
+        if (jobId != null) {
+            productExcelJobRepository.deleteById(jobId);
         }
     }
 

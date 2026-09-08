@@ -2,6 +2,7 @@ package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Getter;
 
 @Getter
@@ -11,6 +12,8 @@ public class ProductExcelJob {
     private final String originalFilename;
     private final Path uploadedFilePath;
     private final boolean includeSelectionDetails;
+    private final int productCount;
+    private final LocalDate usageDate;
     private final Instant createdAt;
     private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
@@ -28,15 +31,20 @@ public class ProductExcelJob {
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
-            boolean includeSelectionDetails
+            boolean includeSelectionDetails,
+            int productCount,
+            LocalDate usageDate
     ) {
         this.jobId = jobId;
         this.userId = userId;
         this.originalFilename = originalFilename;
         this.uploadedFilePath = uploadedFilePath;
         this.includeSelectionDetails = includeSelectionDetails;
+        this.productCount = productCount;
+        this.usageDate = usageDate;
         this.createdAt = Instant.now();
         this.status = ProductExcelJobStatus.PENDING;
+        this.totalCount = productCount;
         this.stage = "작업 대기 중";
         this.message = "카테고리 찾기 작업이 등록되었습니다.";
     }
@@ -46,9 +54,19 @@ public class ProductExcelJob {
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
-            boolean includeSelectionDetails
+            boolean includeSelectionDetails,
+            int productCount,
+            LocalDate usageDate
     ) {
-        return new ProductExcelJob(jobId, userId, originalFilename, uploadedFilePath, includeSelectionDetails);
+        return new ProductExcelJob(
+                jobId,
+                userId,
+                originalFilename,
+                uploadedFilePath,
+                includeSelectionDetails,
+                productCount,
+                usageDate
+        );
     }
 
     public synchronized void markProcessing() {

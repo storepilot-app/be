@@ -1,5 +1,7 @@
 package com.be.userusage.service;
 
+import com.be.global.exception.BusinessException;
+import com.be.global.exception.ErrorCode;
 import com.be.userusage.dto.AdminUserUsageListResponse;
 import com.be.userusage.dto.AdminUserUsageResponse;
 import com.be.userusage.dto.UserUsagePeriod;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class UserUsageService {
     private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final long DAILY_PRODUCT_LIMIT = 2_000;
 
     private final UserUsageRepository userUsageRepository;
 
@@ -46,17 +49,37 @@ public class UserUsageService {
     }
 
     @Transactional
-    public void recordCategoryKeywordJob(Long userId, long productCount) {
+    public LocalDate reserveCategoryProducts(Long userId, long productCount) {
         validateCount(productCount);
         LocalDate today = LocalDate.now(SEOUL_ZONE_ID);
         Instant now = Instant.now();
-
-        userUsageRepository.upsertCategoryKeywordUsage(
+        userUsageRepository.ensureUsageExists(userId, today, now);
+        int reserved = userUsageRepository.reserveProductsWithinDailyLimit(
                 userId,
                 today,
                 productCount,
+                DAILY_PRODUCT_LIMIT,
                 now
         );
+        if (reserved == 0) {
+            throw new BusinessException(
+                    ErrorCode.DAILY_PRODUCT_USAGE_LIMIT_EXCEEDED,
+                    "카테고리 및 키워드 찾기는 하루 최대 2,000개 상품까지 이용할 수 있습니다."
+            );
+        }
+        return today;
+    }
+
+    @Transactional
+    public void completeCategoryKeywordJob(Long userId, LocalDate usageDate, long productCount) {
+        validateCount(productCount);
+        userUsageRepository.completeCategoryKeywordUsage(userId, usageDate, productCount, Instant.now());
+    }
+
+    @Transactional
+    public void releaseCategoryProducts(Long userId, LocalDate usageDate, long productCount) {
+        validateCount(productCount);
+        userUsageRepository.releaseReservedProducts(userId, usageDate, productCount, Instant.now());
     }
 
     @Transactional
