@@ -10,6 +10,7 @@ import com.be.productimage.excel.ProductImageFailureExcelWriter;
 import com.be.productimage.image.JpegImageCompressor;
 import com.be.productimage.image.ProductImageResizer;
 import com.be.productimage.image.WatermarkApplier;
+import com.be.userusage.service.UserUsageService;
 import com.be.watermark.service.UserWatermarkService;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -28,6 +29,7 @@ public class ProductImageDownloadService {
     private final JpegImageCompressor imageCompressor;
     private final ProductImageFailureExcelWriter failureExcelWriter;
     private final UserWatermarkService userWatermarkService;
+    private final UserUsageService userUsageService;
 
     public ProductImageDownloadPrepareResponse prepareImageDownloads(MultipartFile file) {
         return excelReader.read(file);
@@ -45,7 +47,9 @@ public class ProductImageDownloadService {
             if (applyWatermark) {
                 watermarkApplier.apply(resizedImage, userWatermarkService.getRequiredImage(userId));
             }
-            return imageCompressor.compress(resizedImage, originalImage.length, targetSizePercent);
+            byte[] image = imageCompressor.compress(resizedImage, originalImage.length, targetSizePercent);
+            userUsageService.recordImageDownloads(userId, 1);
+            return image;
         } catch (IOException error) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, error.getMessage());
         } catch (InterruptedException error) {
