@@ -38,6 +38,8 @@ class UserUsageServiceTest {
         assertThat(response.period()).isEqualTo(UserUsagePeriod.MONTH);
         assertThat(response.categoryKeywordJobCount()).isEqualTo(2);
         assertThat(response.processedProductCount()).isEqualTo(50);
+        assertThat(response.reservedProductCount()).isZero();
+        assertThat(response.dailyProductLimit()).isEqualTo(2_000);
         assertThat(response.imageDownloadCount()).isEqualTo(5);
         assertThat(response.categoryLearningRequestCount()).isZero();
         assertThat(response.lastUsedDate()).isEqualTo(LocalDate.of(2026, 9, 8));

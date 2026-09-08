@@ -36,6 +36,8 @@ public class UserUsageService {
                 period,
                 usages.stream().mapToLong(UserUsage::getCategoryKeywordJobCount).sum(),
                 usages.stream().mapToLong(UserUsage::getProcessedProductCount).sum(),
+                usages.stream().mapToLong(UserUsage::getReservedProductCount).sum(),
+                DAILY_PRODUCT_LIMIT,
                 usages.stream().mapToLong(UserUsage::getImageDownloadCount).sum(),
                 usages.stream().mapToLong(UserUsage::getCategoryLearningRequestCount).sum(),
                 usages.isEmpty() ? null : usages.getFirst().getUsageDate()
