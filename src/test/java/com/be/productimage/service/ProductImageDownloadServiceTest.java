@@ -1,10 +1,19 @@
 package com.be.productimage.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.be.productimage.client.RemoteImageClient;
 import com.be.productimage.dto.ProductImageDownloadPrepareResponse;
 import com.be.productimage.excel.ProductImageDownloadExcelReader;
+import com.be.productimage.image.JpegImageCompressor;
+import com.be.productimage.image.ProductImageResizer;
 import com.be.productimage.validation.RemoteImageUrlValidator;
+import com.be.userusage.service.UserUsageService;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -16,6 +25,7 @@ import org.springframework.mock.web.MockMultipartFile;
 class ProductImageDownloadServiceTest {
     private final ProductImageDownloadService service = new ProductImageDownloadService(
             new ProductImageDownloadExcelReader(new RemoteImageUrlValidator()),
+            null,
             null,
             null,
             null,
@@ -36,6 +46,40 @@ class ProductImageDownloadServiceTest {
         assertEquals("100_2.jpg", response.images().get(1).filename());
         assertEquals(3, response.failures().getFirst().rowNumber());
         assertEquals("P-2", response.failures().getFirst().name());
+    }
+
+    @Test
+    void recordsUsageAfterImageDownload() throws Exception {
+        RemoteImageClient remoteImageClient = mock(RemoteImageClient.class);
+        ProductImageResizer imageResizer = mock(ProductImageResizer.class);
+        JpegImageCompressor imageCompressor = mock(JpegImageCompressor.class);
+        UserUsageService userUsageService = mock(UserUsageService.class);
+        byte[] originalImage = {1, 2, 3};
+        byte[] downloadedImage = {4, 5, 6};
+        BufferedImage resizedImage = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+        when(remoteImageClient.download("https://example.com/image.png")).thenReturn(originalImage);
+        when(imageResizer.resizeToSquare(originalImage)).thenReturn(resizedImage);
+        when(imageCompressor.compress(resizedImage, originalImage.length, 80)).thenReturn(downloadedImage);
+        ProductImageDownloadService downloadService = new ProductImageDownloadService(
+                null,
+                remoteImageClient,
+                imageResizer,
+                null,
+                imageCompressor,
+                null,
+                null,
+                userUsageService
+        );
+
+        byte[] result = downloadService.downloadImage(
+                "https://example.com/image.png",
+                80,
+                7L,
+                false
+        );
+
+        assertArrayEquals(downloadedImage, result);
+        verify(userUsageService).recordImageDownloads(7L, 1);
     }
 
     private MockMultipartFile imageDownloadExcel() throws Exception {

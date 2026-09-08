@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.be.global.exception.BusinessException;
@@ -12,6 +13,7 @@ import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
 import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
+import com.be.userusage.service.UserUsageService;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -27,6 +29,7 @@ class TrainingProductRequestServiceTest {
     private TrainingProductRequestService service;
     private TrainingProductRequestRepository repository;
     private MyCategoryMappingQueryService myCategoryMappingQueryService;
+    private UserUsageService userUsageService;
 
     @TempDir
     Path tempDirectory;
@@ -35,8 +38,9 @@ class TrainingProductRequestServiceTest {
     void setUp() {
         repository = mock(TrainingProductRequestRepository.class);
         myCategoryMappingQueryService = mock(MyCategoryMappingQueryService.class);
+        userUsageService = mock(UserUsageService.class);
         when(repository.save(any(TrainingProductRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        service = new TrainingProductRequestService(repository, myCategoryMappingQueryService);
+        service = new TrainingProductRequestService(repository, myCategoryMappingQueryService, userUsageService);
         ReflectionTestUtils.setField(service, "uploadDir", tempDirectory.toString());
     }
 
@@ -50,6 +54,7 @@ class TrainingProductRequestServiceTest {
         assertThat(request.getProductCount()).isEqualTo(1);
         assertThat(request.getStatus()).isEqualTo(TrainingProductRequestStatus.RECEIVED);
         assertThat(tempDirectory.resolve("training-product-requests").resolve(request.getStoredFilename())).exists();
+        verify(userUsageService).recordCategoryLearningRequest(1L);
     }
 
     @Test

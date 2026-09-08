@@ -8,6 +8,7 @@ import com.be.trainingproductrequest.domain.TrainingProductRequest;
 import com.be.trainingproductrequest.domain.TrainingProductRequestStatus;
 import com.be.trainingproductrequest.dto.TrainingProductRequestFile;
 import com.be.trainingproductrequest.repository.TrainingProductRequestRepository;
+import com.be.userusage.service.UserUsageService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -39,6 +40,7 @@ public class TrainingProductRequestService {
 
     private final TrainingProductRequestRepository trainingProductRequestRepository;
     private final MyCategoryMappingQueryService myCategoryMappingQueryService;
+    private final UserUsageService userUsageService;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
@@ -57,7 +59,7 @@ public class TrainingProductRequestService {
         try {
             Files.createDirectories(targetPath.getParent());
             Files.write(targetPath, content);
-            return trainingProductRequestRepository.save(TrainingProductRequest.create(
+            TrainingProductRequest request = trainingProductRequestRepository.save(TrainingProductRequest.create(
                     userId,
                     userEmail,
                     originalFilename,
@@ -65,6 +67,8 @@ public class TrainingProductRequestService {
                     content.length,
                     productCount
             ));
+            userUsageService.recordCategoryLearningRequest(userId);
+            return request;
         } catch (IOException error) {
             throw invalid("학습 요청 파일을 저장하지 못했습니다.");
         } catch (RuntimeException error) {

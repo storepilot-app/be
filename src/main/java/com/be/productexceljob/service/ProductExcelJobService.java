@@ -8,6 +8,7 @@ import com.be.productexceljob.domain.ProductExcelJobStatus;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
+import com.be.userusage.service.UserUsageService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +31,7 @@ public class ProductExcelJobService {
     private final ProductExcelJobRepository productExcelJobRepository;
     private final ProductExcelJobRequestValidator productExcelJobRequestValidator;
     private final ProductExcelProcessingService productExcelProcessingService;
+    private final UserUsageService userUsageService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
     private final AtomicLong jobIdGenerator = new AtomicLong(1);
@@ -96,6 +98,7 @@ public class ProductExcelJobService {
                     progressUpdater
             );
             job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
+            recordCompletedJobUsage(job);
         } catch (Exception error) {
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
@@ -103,6 +106,15 @@ public class ProductExcelJobService {
             job.markFailed(message); // 작업 상태를 실패로 표시. 스레드 동작에 영향을 주지 않음
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
+        }
+    }
+
+    private void recordCompletedJobUsage(ProductExcelJob job) {
+        try {
+            userUsageService.recordCategoryKeywordJob(job.getUserId(), job.getTotalCount());
+        } catch (RuntimeException error) {
+            log.error("카테고리 및 키워드 작업 사용량 기록 실패: jobId={}, userId={}",
+                    job.getJobId(), job.getUserId(), error);
         }
     }
 
