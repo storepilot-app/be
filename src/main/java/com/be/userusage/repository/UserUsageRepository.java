@@ -1,14 +1,39 @@
 package com.be.userusage.repository;
 
 import com.be.userusage.domain.UserUsage;
+import com.be.userusage.dto.AdminUserUsageResponse;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserUsageRepository extends JpaRepository<UserUsage, Long> {
+    @Query("""
+            SELECT new com.be.userusage.dto.AdminUserUsageResponse(
+                user.id,
+                user.email,
+                user.role,
+                COALESCE(SUM(usage.categoryKeywordJobCount), 0),
+                COALESCE(SUM(usage.processedProductCount), 0),
+                COALESCE(SUM(usage.imageDownloadCount), 0),
+                COALESCE(SUM(usage.categoryLearningRequestCount), 0),
+                MAX(usage.usageDate)
+            )
+            FROM StorePilotUser user
+            LEFT JOIN UserUsage usage
+                ON usage.userId = user.id
+                AND usage.usageDate BETWEEN :startDate AND :endDate
+            GROUP BY user.id, user.email, user.role, user.createdAt
+            ORDER BY COALESCE(SUM(usage.processedProductCount), 0) DESC, user.createdAt DESC
+            """)
+    List<AdminUserUsageResponse> findAdminUserUsages(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
     @Modifying
     @Query(value = """
             INSERT INTO user_usages (
