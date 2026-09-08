@@ -3,12 +3,21 @@ package com.be.productexceljob.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
 class ProductExcelJobTest {
     @Test
     void tracksBatchProgressAndCompletesAtOneHundredPercent() {
-        ProductExcelJob job = ProductExcelJob.register(1L, 1L, "input.xlsx", Path.of("input.xlsx"), true);
+        ProductExcelJob job = ProductExcelJob.register(
+                1L,
+                1L,
+                "input.xlsx",
+                Path.of("input.xlsx"),
+                true,
+                100,
+                LocalDate.of(2026, 9, 8)
+        );
 
         job.markProcessing();
         job.updateProgress(30, 100, "카테고리 찾는 중");

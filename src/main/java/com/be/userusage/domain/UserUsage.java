@@ -42,6 +42,9 @@ public class UserUsage {
     @Column(name = "processed_product_count", nullable = false)
     private long processedProductCount;
 
+    @Column(name = "reserved_product_count", nullable = false, columnDefinition = "bigint default 0")
+    private long reservedProductCount;
+
     @Column(name = "image_download_count", nullable = false)
     private long imageDownloadCount;
 

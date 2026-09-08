@@ -9,6 +9,7 @@ import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
 import com.be.userusage.service.UserUsageService;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +34,9 @@ class ProductExcelJobServiceTest {
                 directExecutor
         );
         ReflectionTestUtils.setField(service, "uploadDir", tempDirectory.toString());
+        LocalDate usageDate = LocalDate.of(2026, 9, 8);
+        when(validator.validate(any(), any(), any())).thenReturn(3);
+        when(userUsageService.reserveCategoryProducts(1L, 3)).thenReturn(usageDate);
         when(processingService.processExcel(any(), any())).thenAnswer(invocation -> {
             ProductExcelJobProgressUpdater progressUpdater = invocation.getArgument(1);
             progressUpdater.update(3, 3, "결과 엑셀 생성 중");
@@ -47,6 +51,6 @@ class ProductExcelJobServiceTest {
 
         service.createExcelJob(file, 1L, false);
 
-        verify(userUsageService).recordCategoryKeywordJob(1L, 3);
+        verify(userUsageService).completeCategoryKeywordJob(1L, usageDate, 3);
     }
 }

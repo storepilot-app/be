@@ -15,6 +15,10 @@ public class ProductExcelJobRepository {
         return job;
     }
 
+    public void deleteById(long jobId) {
+        jobs.remove(jobId);
+    }
+
     public Optional<ProductExcelJob> findById(long jobId) {
         return Optional.ofNullable(jobs.get(jobId));
     }
