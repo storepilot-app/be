@@ -42,14 +42,17 @@ public class MyCategoryMappingUploadService {
     private final NaverCategoryVersionRepository naverCategoryVersionRepository;
 
     public List<MyCategoryMapping> readResolvedMappings(MultipartFile file, Long userId) {
+        return readMappings(file, userId).stream()
+                .filter(mapping -> mapping.getNaverCategoryId() != null)
+                .toList();
+    }
+
+    public List<MyCategoryMapping> readMappings(MultipartFile file, Long userId) {
         validateFile(file);
         validateUserId(userId);
         Map<String, NaverCategory> naverCategoriesByCode = loadRequiredActiveNaverCategoriesByCode();
         return parseMappings(file, userId, naverCategoriesByCode)
-                .mappings()
-                .stream()
-                .filter(mapping -> mapping.getNaverCategoryId() != null)
-                .toList();
+                .mappings();
     }
 
     @Transactional

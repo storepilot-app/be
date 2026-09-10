@@ -10,6 +10,7 @@ import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
+import com.be.trainingproduct.dto.ProductMappingPreviewResponse;
 import com.be.trainingproduct.service.TrainingProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +33,18 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class TrainingProductController {
     private final TrainingProductService trainingProductService;
+
+    @Operation(summary = "상품 카테고리 매핑 확인", description = "두 엑셀을 비교합니다. DB 저장이나 AI 호출은 수행하지 않습니다.")
+    @PostMapping(value = "/mapping-preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CommonResponse<ProductMappingPreviewResponse> previewMappings(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("myCategoryFile") MultipartFile myCategoryFile
+    ) {
+        requireAdmin(loginUser);
+        return CommonResponse.success(trainingProductService.previewMappings(loginUser.id(), file, myCategoryFile),
+                "상품 카테고리 매핑을 확인했습니다.");
+    }
 
     @Operation(
             summary = "기존 상품 FAISS 인덱스 재생성",

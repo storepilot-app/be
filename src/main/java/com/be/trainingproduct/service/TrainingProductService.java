@@ -17,6 +17,7 @@ import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
+import com.be.trainingproduct.dto.ProductMappingPreviewResponse;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -51,6 +52,40 @@ public class TrainingProductService {
     private final MyCategoryMappingUploadService myCategoryMappingUploadService;
     private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
     private final ProductCategoryStatService productCategoryStatService;
+
+    public ProductMappingPreviewResponse previewMappings(Long userId, MultipartFile file, MultipartFile myCategoryFile) {
+        validateUserId(userId);
+        validateFiles(file == null ? List.of() : List.of(file));
+        Map<String, MyCategoryMapping> mappings = new HashMap<>();
+        myCategoryMappingUploadService.readMappings(myCategoryFile, userId)
+                .forEach(mapping -> mappings.put(mapping.getMyCategoryCode(), mapping));
+        List<ProductMappingPreviewResponse.Item> products = new ArrayList<>();
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            if (workbook.getNumberOfSheets() == 0) {
+                throw invalid("상품 엑셀에 시트가 없습니다.");
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            TrainingProductColumns columns = resolveColumns(sheet, formatter);
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                String name = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
+                if (name.isBlank()) continue;
+                String code = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
+                MyCategoryMapping mapping = mappings.get(code);
+                String reason = code.isBlank() ? "마이카테 코드가 없습니다."
+                        : mapping == null ? "매핑 파일에 해당 마이카테 코드가 없습니다."
+                        : mapping.getNaverCategoryId() == null ? "활성 네이버 카테고리에 없는 코드입니다." : null;
+                products.add(new ProductMappingPreviewResponse.Item(i + 1, name, code,
+                        mapping == null ? null : mapping.getNaverCategoryValue(),
+                        mapping == null ? null : mapping.getNaverCategoryFullPath(), reason));
+            }
+        } catch (IOException e) {
+            throw invalid("상품 엑셀 파일을 읽지 못했습니다.");
+        }
+        return new ProductMappingPreviewResponse(products);
+    }
 
     public ProductIndexRebuildResponse rebuildIndex(
             Long userId,
