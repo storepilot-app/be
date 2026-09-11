@@ -2,28 +2,26 @@
 
 상품 엑셀을 분석해 사용자별 마이카테고리와 검색 키워드를 채우고, 상품 이미지 가공까지 지원하는 온라인 판매자용 서비스입니다.
 
-[Demo](https://storepilot-three.vercel.app/) · [Guide](https://literate-marquis-4cc.notion.site/StorePilot-3d2c3b070b418090809ad8e419b2df0e) · [Backend Repository](https://github.com/storepilot-app/be) · [Frontend Repository](https://github.com/storepilot-app/fe) · [AI Server Repository](https://github.com/storepilot-app/ai-server)
+[서비스 바로가기](https://storepilot-three.vercel.app/) · [사용 가이드](https://literate-marquis-4cc.notion.site/StorePilot-3d2c3b070b418090809ad8e419b2df0e) · [Backend Repository](https://github.com/storepilot-app/be) · [Frontend Repository](https://github.com/storepilot-app/fe) · [AI Server Repository](https://github.com/storepilot-app/ai-server)
 
 ## 📌 프로젝트 소개
 
-온라인 쇼핑몰을 운영하는 부모님이 상품을 등록할 때마다 적절한 카테고리를 찾고 상품 정보를 정리하는 데 시간을 쓰시는 모습을 보고 개발했습니다.
+스마트 스토어 운영하는 부모님이 상품을 등록할 때마다 적절한 카테고리를 찾고 상품 정보를 정리하는 데 시간을 쓰시는 모습을 보고 개발했습니다.
 
-유플렛에서 내려받은 신상품 엑셀을 업로드하면, 기존 상품 데이터와 카테고리 정보를 기반으로 적합한 네이버 카테고리를 찾습니다. 이를 사용자가 등록한 마이카테고리 코드로 변환하고 검색 키워드와 함께 결과 엑셀에 기록합니다.
+신상품 엑셀을 업로드하면, 기존 상품 데이터와 카테고리 정보를 기반으로 적합한 네이버 카테고리를 찾습니다. 이를 사용자가 등록한 마이카테고리 코드로 변환하고 검색 키워드와 함께 결과 엑셀에 기록합니다.
 
 개인 프로젝트로 백엔드·AI 서버·프런트엔드를 구현하고 서비스를 배포했으며, 사용 과정에서 받은 피드백을 바탕으로 기능을 개선하고 있습니다.
-
-서비스의 **카테고리 학습은 상품–카테고리 사례를 검색 인덱스에 반영하는 과정**입니다. 모델 파인튜닝을 뜻하지 않으며, 사용자가 제출한 파일은 관리자 검토 후 반영합니다.
 
 ## 🖥️ 주요 기능
 
 | 기능 | 사용자 경험 |
 | --- | --- |
-| 카테고리 및 키워드 찾기 | 상품 엑셀 업로드 → 작업 진행률 확인 → 마이카테·키워드가 채워진 엑셀 저장 |
+| 카테고리 및 키워드 찾기 | 상품 엑셀 업로드 → 작업 진행률 확인 → 마이카테·키워드가 채워진 엑셀 저장 (현재 1회 1,500개·하루 2,000개 상품 처리 제한) |
 | 사용자별 마이카테 매핑 | 사용 중인 매핑 파일을 등록하고 자신의 코드 체계에 맞는 결과 확인 |
 | 이미지 다운로드 | 엑셀의 이미지 URL을 읽어 JPEG 저장, 목표 용량 조절 및 실패 목록 엑셀 제공 |
 | 워터마크 | 계정별 워터마크 이미지·위치·크기·불투명도 설정 및 다운로드 시 선택 적용 |
 | 카테고리 학습 요청 | 기존 상품 파일 제출, 접수·검토·완료·반려 상태 조회 |
-| 사용량 관리 | 오늘·이번 달·전체 사용량 조회, 1회 1,500개·하루 2,000개 상품 처리 제한 |
+| 사용량 관리 | 오늘·이번 달·전체 사용량 조회 |
 | 문의 | 자주 묻는 질문, 문의 등록·삭제·답변 확인 |
 | 관리자 도구 | 검색 인덱스 관리, 학습 요청 검토, 사용자 사용량 조회, 상품 카테고리 매핑 확인 |
 
@@ -31,8 +29,6 @@
 카테고리 및 키워드 찾기(진행률), 이미지 다운로드(실패 목록), 관리자 매핑 확인.
 이메일·실제 상품 데이터 등 개인정보/사용자 데이터가 노출되지 않는 테스트 화면을 사용합니다.
 -->
-
-실제 화면과 사용 순서는 상단의 Demo와 Guide에서 확인할 수 있습니다. 관리자 기능은 관리자 계정에서만 표시됩니다.
 
 ## 🏗️ Architecture
 
@@ -48,7 +44,7 @@ flowchart LR
     AI --> CATEGORY[NumPy 카테고리 벡터]
     AI --> LLM[LLM 후보 판단]
     BE --> MAIL[Resend 인증 메일]
-    BE --> IMAGE[외부 이미지 서버]
+    BE --> IMAGE[상품 이미지 원본 URL]
 ```
 
 - **Frontend:** 파일 선택, 인증 상태, 진행률 폴링, 파일·폴더 저장과 사용자·관리자 화면
@@ -71,8 +67,6 @@ flowchart LR
 | Frontend | Next.js 16.3, React 19, TypeScript, Tailwind CSS 4 | 사용자·관리자 UI |
 | 빌드·검증 | Gradle Wrapper, JUnit, Mockito, H2, k6 | 빌드·단위·통합·부하 테스트 |
 | 문서·운영 | Springdoc OpenAPI 3.0.0, Actuator, Vercel, Ubuntu | API 문서·상태 확인·배포 |
-
-AI 서버는 Solar 외에 OpenAI 호환 임베딩과 로컬 sentence-transformers 모델도 지원합니다. 키워드는 BE의 규칙 기반 생성기로 처리하며 별도 LLM 호출을 하지 않습니다.
 
 ## 🔍 Category Matching Pipeline
 
@@ -103,9 +97,6 @@ flowchart TD
 3. **후보 구성:** 상품 근거의 카테고리 최대 5개와 중복되지 않는 직접 검색 카테고리 최대 5개를 사용합니다.
 4. **자동 선택:** Alias 규칙을 우선 적용합니다. 상품 근거를 통한 자동 선택은 최대 유사도 0.90 이상, 지지도 0.75 이상, 1·2위 지지도 차이 0.15 이상, 지지 상품 3개 이상을 모두 요구합니다.
 5. **LLM 판단:** 자동 선택하기 어려운 상품은 후보 중 하나를 선택하거나 매칭을 거절하도록 요청합니다.
-
-Solar는 query/passage 모델을 분리합니다. 두 역할이 같은 로컬·OpenAI provider에서는 하나의 벡터를 재사용합니다.
-유사도 점수와 지지도는 정답 확률이 아닙니다. LLM 키 미설정·호출 실패 시에는 첫 후보로 대체하므로 결과와 함께 LLM 상태도 확인해야 합니다.
 
 ### 학습 데이터 처리
 
