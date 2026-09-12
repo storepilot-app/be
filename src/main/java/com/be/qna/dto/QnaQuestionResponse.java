@@ -4,6 +4,7 @@ import com.be.qna.domain.QnaQuestion;
 import com.be.qna.domain.QnaQuestionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 
 @Schema(description = "1:1 문의 항목")
 public record QnaQuestionResponse(
@@ -26,7 +27,8 @@ public record QnaQuestionResponse(
         @Schema(description = "등록 일시")
         Instant createdAt,
         @Schema(description = "수정 일시")
-        Instant updatedAt
+        Instant updatedAt,
+        List<Message> messages
 ) {
     public static QnaQuestionResponse from(QnaQuestion question) {
         return new QnaQuestionResponse(
@@ -39,7 +41,13 @@ public record QnaQuestionResponse(
                 question.getAnsweredBy(),
                 question.getAnsweredAt(),
                 question.getCreatedAt(),
-                question.getUpdatedAt()
+                question.getUpdatedAt(),
+                question.getMessages().stream()
+                        .map(message -> new Message(message.getContent(), message.isAdmin(), message.getCreatedAt()))
+                        .toList()
         );
+    }
+
+    public record Message(String content, boolean admin, Instant createdAt) {
     }
 }

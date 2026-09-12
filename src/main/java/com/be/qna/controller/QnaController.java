@@ -6,6 +6,7 @@ import com.be.qna.domain.QnaQuestion;
 import com.be.qna.dto.QnaFaqListResponse;
 import com.be.qna.dto.QnaFaqResponse;
 import com.be.qna.dto.QnaQuestionCreateRequest;
+import com.be.qna.dto.QnaQuestionFollowUpRequest;
 import com.be.qna.dto.QnaQuestionListResponse;
 import com.be.qna.dto.QnaQuestionResponse;
 import com.be.qna.service.QnaService;
@@ -76,5 +77,16 @@ public class QnaController {
     ) {
         qnaService.deleteMyQuestion(loginUser.id(), questionId);
         return CommonResponse.success(null, "문의가 삭제되었습니다.");
+    }
+
+    @Operation(summary = "내 문의 재질문 등록")
+    @PostMapping("/questions/{questionId}/follow-ups")
+    public CommonResponse<QnaQuestionResponse> followUpQuestion(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable Long questionId,
+            @RequestBody QnaQuestionFollowUpRequest request
+    ) {
+        return CommonResponse.success(QnaQuestionResponse.from(
+                qnaService.followUpQuestion(loginUser.id(), questionId, request)), "재질문이 등록되었습니다.");
     }
 }

@@ -7,6 +7,7 @@ import com.be.qna.domain.QnaQuestion;
 import com.be.qna.dto.QnaFaqSaveRequest;
 import com.be.qna.dto.QnaQuestionAnswerRequest;
 import com.be.qna.dto.QnaQuestionCreateRequest;
+import com.be.qna.dto.QnaQuestionFollowUpRequest;
 import com.be.qna.repository.QnaFaqRepository;
 import com.be.qna.repository.QnaQuestionRepository;
 import java.util.List;
@@ -124,6 +125,19 @@ public class QnaService {
     public void deleteMyQuestion(Long userId, Long questionId) {
         QnaQuestion question = getMyQuestion(userId, questionId);
         qnaQuestionRepository.delete(question);
+    }
+
+    @Transactional
+    public QnaQuestion followUpQuestion(Long userId, Long questionId,
+            QnaQuestionFollowUpRequest request) {
+        QnaQuestion question = getMyQuestion(userId, questionId);
+        if (request == null) {
+            throw invalid("재질문 내용이 필요합니다.");
+        }
+        String content = required(request.content(), "재질문 내용을 입력해 주세요.");
+        validateMaxLength(content, CONTENT_MAX_LENGTH, "재질문은 5000자 이하로 입력해 주세요.");
+        question.followUp(content);
+        return question;
     }
 
     @Transactional

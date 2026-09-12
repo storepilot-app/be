@@ -1,6 +1,11 @@
 package com.be.qna.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +15,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
+import java.util.ArrayList;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,6 +32,24 @@ import lombok.NoArgsConstructor;
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QnaQuestion {
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "qna_question_messages", joinColumns = @JoinColumn(name = "question_id"))
+    @OrderColumn(name = "message_order")
+    private List<QnaMessage> messages = new ArrayList<>();
+
+    public void followUp(String content) {
+        Instant now = Instant.now();
+        if (answer != null) {
+            messages.add(new QnaMessage(answer, true, answeredAt));
+        }
+        messages.add(new QnaMessage(content, false, now));
+        answer = null;
+        answeredBy = null;
+        answeredAt = null;
+        status = QnaQuestionStatus.WAITING;
+        updatedAt = now;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
