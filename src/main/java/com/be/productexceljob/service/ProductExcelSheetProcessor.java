@@ -56,20 +56,23 @@ public class ProductExcelSheetProcessor {
         CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
         int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
         int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
-        ensureHeader(headerRow, KEYWORD_COLUMN_INDEX, KEYWORD_HEADER);
-        ensureHeader(headerRow, MY_CATEGORY_COLUMN_INDEX, MY_CATEGORY_HEADER);
-        ensureHeader(headerRow, NAVER_CATEGORY_COLUMN_INDEX, NAVER_CATEGORY_HEADER);
+        int keywordColumnIndex = findOrAppendColumn(sheet, KEYWORD_HEADER);
+        int myCategoryColumnIndex = findOrAppendColumn(sheet, MY_CATEGORY_HEADER);
+        int naverCategoryColumnIndex = findOrAppendColumn(sheet, NAVER_CATEGORY_HEADER);
+        int detailOffset = nextEmptyColumn(sheet) - TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX;
         if (includeSelectionDetails) {
-            ensureTopNaverCategoryHeaders(headerRow);
-            applyTopNaverCategoryColumnWidths(sheet);
-        } else {
-            hideSelectionDetailColumns(sheet);
+            ensureTopNaverCategoryHeaders(headerRow, detailOffset);
+            applyTopNaverCategoryColumnWidths(sheet, detailOffset);
         }
 
         return new ProductExcelSheetContext(
                 sheet,
                 productNameColumnIndex,
                 categoryColumnIndex,
+                keywordColumnIndex,
+                myCategoryColumnIndex,
+                naverCategoryColumnIndex,
+                detailOffset,
                 selectedStyle,
                 rejectedStyle
         );
@@ -122,7 +125,7 @@ public class ProductExcelSheetProcessor {
             String keywordCategory = keywordCategories.getOrDefault(productRow.rowId(), category);
             List<GeneratedKeyword> keywords = keywordsByRow.getOrDefault(productRow.rowId(), List.of());
 
-            row.createCell(KEYWORD_COLUMN_INDEX).setCellValue(keywords.stream()
+            row.getCell(sheetContext.keywordColumnIndex(), Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).setCellValue(keywords.stream()
                     .map(keyword -> keyword.score().keyword())
                     .map(this::removeKeywordSpaces)
                     .collect(Collectors.joining(",")));
@@ -137,14 +140,15 @@ public class ProductExcelSheetProcessor {
                         keyword.reasons()
                 ));
             }
-            row.createCell(MY_CATEGORY_COLUMN_INDEX).setCellValue(myCategory);
-            writeNaverCategory(row, myCategoryResult);
+            row.getCell(sheetContext.myCategoryColumnIndex(), Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).setCellValue(myCategory);
+            writeNaverCategory(row, myCategoryResult, sheetContext.naverCategoryColumnIndex());
             if (includeSelectionDetails) {
-                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX).setCellValue(productName);
-                writeSimilarProducts(row, myCategoryResult, sheetContext.selectedStyle());
-                writeSelectedCategory(row, myCategoryResult);
-                writeLlmStatus(row, myCategoryResult, sheetContext.selectedStyle(), sheetContext.rejectedStyle());
-                writeCategoryEmbeddingCandidates(row, myCategoryResult, sheetContext.selectedStyle());
+                int offset = sheetContext.detailOffset();
+                row.createCell(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX + offset).setCellValue(productName);
+                writeSimilarProducts(row, myCategoryResult, sheetContext.selectedStyle(), offset);
+                writeSelectedCategory(row, myCategoryResult, offset);
+                writeLlmStatus(row, myCategoryResult, sheetContext.selectedStyle(), sheetContext.rejectedStyle(), offset);
+                writeCategoryEmbeddingCandidates(row, myCategoryResult, sheetContext.selectedStyle(), offset);
             }
         }
 
@@ -177,8 +181,9 @@ public class ProductExcelSheetProcessor {
         if (summaryRow == null) {
             summaryRow = sheet.createRow(summaryRowIndex);
         }
-        summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue("못찾음/거절 비율");
-        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX).setCellValue(String.format(
+        int offset = sheetContext.detailOffset();
+        summaryRow.createCell(SELECTED_CATEGORY_COLUMN_INDEX + offset).setCellValue("못찾음/거절 비율");
+        summaryRow.createCell(LLM_STATUS_COLUMN_INDEX + offset).setCellValue(String.format(
                 Locale.ROOT,
                 "%d/%d (%.2f%%)",
                 unmatchedOrRejectedCount,
@@ -186,7 +191,7 @@ public class ProductExcelSheetProcessor {
                 ratio
         ));
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
-            summaryRow.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index).setCellValue("");
+            summaryRow.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + offset + index).setCellValue("");
         }
     }
 
@@ -225,50 +230,64 @@ public class ProductExcelSheetProcessor {
         cell.setCellValue(value);
     }
 
-    private void ensureTopNaverCategoryHeaders(Row headerRow) {
-        ensureHeader(headerRow, TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_HEADER);
+    private int nextEmptyColumn(Sheet sheet) {
+        int column = 0;
+        for (Row row : sheet) column = Math.max(column, row.getLastCellNum());
+        return column;
+    }
+
+    private int findOrAppendColumn(Sheet sheet, String name) {
+        Row header = sheet.getRow(0);
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+        int found = -1;
+        for (Cell cell : header) {
+            if (formatter.formatCellValue(cell).replaceAll("\\s+", "").equals(name)) {
+                if (found >= 0) throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "중복된 열 이름입니다: " + name);
+                found = cell.getColumnIndex();
+            }
+        }
+        if (found >= 0) return found;
+        int column = nextEmptyColumn(sheet);
+        ensureHeader(header, column, name);
+        return column;
+    }
+
+    private void ensureTopNaverCategoryHeaders(Row headerRow, int offset) {
+        ensureHeader(headerRow, (TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX + offset), TOP_NAVER_PRODUCT_NAME_HEADER);
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
             ensureHeader(
                     headerRow,
-                    TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index,
+                    (TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + offset) + index,
                     TOP_NAVER_CATEGORIES_HEADER_PREFIX + (index + 1)
             );
         }
-        ensureHeader(headerRow, SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_HEADER);
-        ensureHeader(headerRow, LLM_STATUS_COLUMN_INDEX, LLM_STATUS_HEADER);
+        ensureHeader(headerRow, (SELECTED_CATEGORY_COLUMN_INDEX + offset), SELECTED_CATEGORY_HEADER);
+        ensureHeader(headerRow, (LLM_STATUS_COLUMN_INDEX + offset), LLM_STATUS_HEADER);
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
             ensureHeader(
                     headerRow,
-                    CATEGORY_EMBEDDING_START_COLUMN_INDEX + index,
+                    (CATEGORY_EMBEDDING_START_COLUMN_INDEX + offset) + index,
                     CATEGORY_EMBEDDING_HEADER_PREFIX + (index + 1)
             );
         }
     }
 
-    private void applyTopNaverCategoryColumnWidths(Sheet sheet) {
-        sheet.setColumnHidden(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, false);
-        sheet.setColumnWidth(TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX, TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
+    private void applyTopNaverCategoryColumnWidths(Sheet sheet, int offset) {
+        sheet.setColumnHidden((TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX + offset), false);
+        sheet.setColumnWidth((TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX + offset), TOP_NAVER_PRODUCT_NAME_COLUMN_WIDTH);
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
-            int columnIndex = TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index;
+            int columnIndex = (TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + offset) + index;
             sheet.setColumnHidden(columnIndex, false);
             sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
         }
-        sheet.setColumnHidden(SELECTED_CATEGORY_COLUMN_INDEX, false);
-        sheet.setColumnWidth(SELECTED_CATEGORY_COLUMN_INDEX, SELECTED_CATEGORY_COLUMN_WIDTH);
-        sheet.setColumnHidden(LLM_STATUS_COLUMN_INDEX, false);
-        sheet.setColumnWidth(LLM_STATUS_COLUMN_INDEX, LLM_STATUS_COLUMN_WIDTH);
+        sheet.setColumnHidden((SELECTED_CATEGORY_COLUMN_INDEX + offset), false);
+        sheet.setColumnWidth((SELECTED_CATEGORY_COLUMN_INDEX + offset), SELECTED_CATEGORY_COLUMN_WIDTH);
+        sheet.setColumnHidden((LLM_STATUS_COLUMN_INDEX + offset), false);
+        sheet.setColumnWidth((LLM_STATUS_COLUMN_INDEX + offset), LLM_STATUS_COLUMN_WIDTH);
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
-            int columnIndex = CATEGORY_EMBEDDING_START_COLUMN_INDEX + index;
+            int columnIndex = (CATEGORY_EMBEDDING_START_COLUMN_INDEX + offset) + index;
             sheet.setColumnHidden(columnIndex, false);
             sheet.setColumnWidth(columnIndex, TOP_NAVER_CATEGORY_COLUMN_WIDTH);
-        }
-    }
-
-    private void hideSelectionDetailColumns(Sheet sheet) {
-        for (int columnIndex = TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX;
-             columnIndex < CATEGORY_EMBEDDING_START_COLUMN_INDEX + CATEGORY_EMBEDDING_COUNT;
-             columnIndex++) {
-            sheet.setColumnHidden(columnIndex, true);
         }
     }
 
@@ -290,21 +309,22 @@ public class ProductExcelSheetProcessor {
         return NO_CATEGORY_MATCH;
     }
 
-    private void writeNaverCategory(Row row, MyCategoryMatchResult result) {
+    private void writeNaverCategory(Row row, MyCategoryMatchResult result, int columnIndex) {
         String naverCategory = result.naverCategory() == null || result.naverCategory().isBlank()
                 ? NO_CATEGORY_MATCH
                 : result.naverCategory();
-        row.createCell(NAVER_CATEGORY_COLUMN_INDEX).setCellValue(naverCategory);
+        row.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK).setCellValue(naverCategory);
     }
 
     private void writeSimilarProducts(
             Row row,
             MyCategoryMatchResult result,
-            CellStyle selectedCategoryStyle
+            CellStyle selectedCategoryStyle,
+            int offset
     ) {
         List<CategoryMatchSimilarProduct> similarProducts = result.similarProducts();
         for (int index = 0; index < TOP_NAVER_CATEGORIES_COUNT; index++) {
-            Cell cell = row.createCell(TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + index);
+            Cell cell = row.createCell((TOP_NAVER_CATEGORIES_START_COLUMN_INDEX + offset) + index);
             if (similarProducts.isEmpty() && index == 0) {
                 cell.setCellValue("유사상품 없음");
                 continue;
@@ -323,21 +343,22 @@ public class ProductExcelSheetProcessor {
         }
     }
 
-    private void writeSelectedCategory(Row row, MyCategoryMatchResult result) {
+    private void writeSelectedCategory(Row row, MyCategoryMatchResult result, int offset) {
         String value = result.naverCategory() == null || result.naverCategory().isBlank()
                 ? NO_SELECTED_CATEGORY
                 : result.naverCategory();
-        row.createCell(SELECTED_CATEGORY_COLUMN_INDEX).setCellValue(value);
+        row.createCell((SELECTED_CATEGORY_COLUMN_INDEX + offset)).setCellValue(value);
     }
 
     private void writeCategoryEmbeddingCandidates(
             Row row,
             MyCategoryMatchResult result,
-            CellStyle selectedCategoryStyle
+            CellStyle selectedCategoryStyle,
+            int offset
     ) {
         List<CategoryMatchCandidate> candidates = result.topNaverCategoryCandidates();
         for (int index = 0; index < CATEGORY_EMBEDDING_COUNT; index++) {
-            Cell cell = row.createCell(CATEGORY_EMBEDDING_START_COLUMN_INDEX + index);
+            Cell cell = row.createCell((CATEGORY_EMBEDDING_START_COLUMN_INDEX + offset) + index);
             if (index >= candidates.size()) {
                 cell.setCellValue("");
                 continue;
@@ -356,9 +377,10 @@ public class ProductExcelSheetProcessor {
             Row row,
             MyCategoryMatchResult result,
             CellStyle selectedStyle,
-            CellStyle rejectedStyle
+            CellStyle rejectedStyle,
+            int offset
     ) {
-        Cell cell = row.createCell(LLM_STATUS_COLUMN_INDEX);
+        Cell cell = row.createCell((LLM_STATUS_COLUMN_INDEX + offset));
         cell.setCellValue(formatLlmStatus(result.llmStatus(), result.llmStatusDetail()));
         if ("SELECTED".equals(result.llmStatus()) || "AUTO_SELECTED".equals(result.llmStatus())) {
             cell.setCellStyle(selectedStyle);
@@ -421,6 +443,10 @@ public class ProductExcelSheetProcessor {
             Sheet sheet,
             int productNameColumnIndex,
             int categoryColumnIndex,
+            int keywordColumnIndex,
+            int myCategoryColumnIndex,
+            int naverCategoryColumnIndex,
+            int detailOffset,
             CellStyle selectedStyle,
             CellStyle rejectedStyle
     ) {

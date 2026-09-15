@@ -1,9 +1,6 @@
 package com.be.productexceljob.excel;
 
 public final class ProductExcelLayout {
-    public static final int KEYWORD_COLUMN_INDEX = 11; // L
-    public static final int MY_CATEGORY_COLUMN_INDEX = 19; // T
-    public static final int NAVER_CATEGORY_COLUMN_INDEX = 20; // U
     public static final int TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX = 26; // AA
     public static final int TOP_NAVER_CATEGORIES_START_COLUMN_INDEX = 27; // AB
     public static final int TOP_NAVER_CATEGORIES_COUNT = 5;
