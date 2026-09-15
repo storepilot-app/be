@@ -108,7 +108,8 @@ public class ProductExcelProcessingService {
             ProductExcelJobProgressUpdater progressUpdater
     ) {
         List<CategoryMatchProductRequest> products = productRows.stream()
-                .map(productRow -> new CategoryMatchProductRequest(productRow.rowId(), productRow.productName()))
+                .map(productRow -> new CategoryMatchProductRequest(
+                        productRow.rowId(), productRow.productName(), productRow.imageUrl()))
                 .toList();
         int totalCount = products.size();
         progressUpdater.update(0, totalCount, "카테고리 검색 준비 중");
@@ -137,7 +138,9 @@ public class ProductExcelProcessingService {
                         .map(productRow -> new ProductKeywordSource(
                                 productRow.rowId(),
                                 productRow.productName(),
-                                keywordCategories.get(productRow.rowId())
+                                keywordCategories.get(productRow.rowId()),
+                                myCategoryResults.getOrDefault(productRow.rowId(),
+                                        MyCategoryMatchResult.noCategoryMatch()).imageAnalysis()
                         ))
                         .toList(),
                 resolvedKeywordCount

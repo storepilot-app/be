@@ -10,8 +10,20 @@ public record MyCategoryMatchResult(
         String llmSelectedCategory,
         String llmStatus,
         String llmStatusDetail,
-        List<CategoryMatchSimilarProduct> similarProducts
+        List<CategoryMatchSimilarProduct> similarProducts,
+        ImageProductAnalysis imageAnalysis
 ) {
+    public MyCategoryMatchResult(MyCategoryMatchStatus status, String myCategoryCode, String naverCategory,
+            List<CategoryMatchCandidate> candidates, String llmSelectedCategory, String llmStatus,
+            String llmStatusDetail, List<CategoryMatchSimilarProduct> similarProducts) {
+        this(status, myCategoryCode, naverCategory, candidates, llmSelectedCategory, llmStatus,
+                llmStatusDetail, similarProducts, null);
+    }
+
+    public MyCategoryMatchResult withImageAnalysis(ImageProductAnalysis analysis) {
+        return new MyCategoryMatchResult(status, myCategoryCode, naverCategory, topNaverCategoryCandidates,
+                llmSelectedCategory, llmStatus, llmStatusDetail, similarProducts, analysis);
+    }
     public MyCategoryMatchResult {
         topNaverCategoryCandidates = topNaverCategoryCandidates == null ? List.of() : List.copyOf(topNaverCategoryCandidates);
         similarProducts = similarProducts == null ? List.of() : List.copyOf(similarProducts);
@@ -123,7 +135,8 @@ public record MyCategoryMatchResult(
                 llmSelectedCategory,
                 llmStatus,
                 llmStatusDetail,
-                values
+                values,
+                imageAnalysis
         );
     }
 

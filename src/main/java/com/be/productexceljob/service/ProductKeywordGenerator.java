@@ -54,6 +54,7 @@ public class ProductKeywordGenerator {
                             product.productName(),
                             product.category(),
                             repeatedPhrases.getOrDefault(product.rowId(), List.of()),
+                            product.imageAnalysis() == null ? List.of() : product.imageAnalysis().keywordTerms(),
                             keywordCount
                     )
             );
@@ -65,9 +66,15 @@ public class ProductKeywordGenerator {
             String productName,
             String category,
             List<String> repeatedPhrases,
+            List<String> imageTerms,
             int keywordCount
     ) {
-        List<String> productTokens = productNameTokenExtractor.extract(productName);
+        List<String> productTokens = new ArrayList<>(productNameTokenExtractor.extract(productName));
+        for (String term : imageTerms) {
+            for (String token : productNameTokenExtractor.extract(term)) {
+                if (!productTokens.contains(token)) productTokens.add(token);
+            }
+        }
         List<String> categoryTokens = categoryTokenExtractor.extract(category);
         List<String> synonymSources = new ArrayList<>();
         synonymSources.addAll(productTokens);
@@ -94,15 +101,24 @@ public class ProductKeywordGenerator {
                 .limit(keywordCount)
                 .map(score -> new GeneratedKeyword(
                         score,
-                        resolveKeywordReasons(
+                        withImageReason(resolveKeywordReasons(
                                 score.keyword(),
                                 productTokens,
                                 categoryTokens,
                                 repeatedPhrases,
                                 synonymExpansions
-                        )
+                        ), score.keyword(), imageTerms)
                 ))
                 .toList();
+    }
+
+    private List<String> withImageReason(List<String> reasons, String keyword, List<String> imageTerms) {
+        if (imageTerms.stream().noneMatch(term -> keyword.replace(" ", "").contains(term.replace(" ", "")))) {
+            return reasons;
+        }
+        List<String> result = new ArrayList<>(reasons);
+        result.add("이미지 분석 보조 정보");
+        return result;
     }
 
     private List<String> resolveKeywordReasons(
@@ -201,8 +217,12 @@ public class ProductKeywordGenerator {
     public record ProductKeywordSource(
             int rowId,
             String productName,
-            String category
+            String category,
+            com.be.categorymatcher.dto.ImageProductAnalysis imageAnalysis
     ) {
+        public ProductKeywordSource(int rowId, String productName, String category) {
+            this(rowId, productName, category, null);
+        }
     }
 
     public record GeneratedKeyword(

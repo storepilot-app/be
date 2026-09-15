@@ -141,7 +141,7 @@ public class CategoryMatcherService {
         if (matchedCategory == null) {
             return MyCategoryMatchResult
                     .noCategoryMatch(topNaverCategoryCandidates, llmSelectedCategory, llmStatus, llmStatusDetail)
-                    .withSimilarProducts(similarProducts);
+                    .withSimilarProducts(similarProducts).withImageAnalysis(prediction.imageAnalysis());
         }
 
         MyCategoryMapping mapping = mappingsByNaverCategoryCode.get(matchedCategory.getCategoryCode());
@@ -161,7 +161,7 @@ public class CategoryMatcherService {
                         llmStatus,
                         llmStatusDetail
                 );
-        return result.withSimilarProducts(similarProducts);
+        return result.withSimilarProducts(similarProducts).withImageAnalysis(prediction.imageAnalysis());
     }
 
     private String llmSelectedCategory(CategoryMatchPrediction prediction) {

@@ -79,6 +79,7 @@ public class ProductExcelSheetProcessor {
         List<ProductExcelRow> productRows = new ArrayList<>();
         DataFormatter formatter = new DataFormatter(Locale.KOREA);
         Sheet sheet = sheetContext.sheet();
+        int imageColumn = findOptionalColumnIndex(sheet.getRow(0), "목록이미지1");
         for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) {
@@ -93,7 +94,8 @@ public class ProductExcelSheetProcessor {
                 continue;
             }
 
-            productRows.add(new ProductExcelRow(rowIndex, row, productName, category));
+            String imageUrl = imageColumn < 0 ? null : readCell(row, imageColumn, formatter).trim();
+            productRows.add(new ProductExcelRow(rowIndex, row, productName, category, imageUrl));
         }
         return productRows;
     }
@@ -428,7 +430,11 @@ public class ProductExcelSheetProcessor {
             int rowId,
             Row row,
             String productName,
-            String category
+            String category,
+            String imageUrl
     ) {
+        ProductExcelRow(int rowId, Row row, String productName, String category) {
+            this(rowId, row, productName, category, null);
+        }
     }
 }
