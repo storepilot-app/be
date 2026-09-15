@@ -11,6 +11,20 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ProductKeywordGeneratorTest {
+    @Test
+    void usesImageEvidenceOnlyWhenConsistentWithProductName() {
+        var image = new com.be.categorymatcher.dto.ImageProductAnalysis(
+                "반창고", List.of("파란색"), List.of(), List.of("방수"), List.of(), true, 0.9);
+        var result = generator.generate(List.of(new ProductKeywordSource(1, "캐릭터 상품", "", image)), 30);
+        assertTrue(result.get(1).stream().anyMatch(keyword -> keyword.score().keyword().contains("반창고")));
+        assertTrue(result.get(1).stream().anyMatch(keyword -> keyword.reasons().contains("이미지 분석 보조 정보")));
+        assertFalse(result.get(1).stream().anyMatch(keyword -> keyword.score().keyword().contains("방수")));
+        var mismatch = new com.be.categorymatcher.dto.ImageProductAnalysis(
+                "반창고", List.of(), List.of(), List.of(), List.of(), false, 0.99);
+        var textOnly = generator.generate(List.of(new ProductKeywordSource(1, "캐릭터 상품", "")), 30);
+        org.junit.jupiter.api.Assertions.assertEquals(textOnly,
+                generator.generate(List.of(new ProductKeywordSource(1, "캐릭터 상품", "", mismatch)), 30));
+    }
     private final ProductNameTokenExtractor productNameTokenExtractor = new ProductNameTokenExtractor();
     private final ProductKeywordGenerator generator = new ProductKeywordGenerator(
             new CategoryTokenExtractor(),

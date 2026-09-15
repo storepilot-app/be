@@ -29,10 +29,12 @@ class ProductExcelSheetProcessorTest {
             Row header = sheet.createRow(0);
             header.createCell(0).setCellValue("상품명");
             header.createCell(1).setCellValue("카테고리");
+            header.createCell(5).setCellValue("목록이미지1");
 
             Row productRow = sheet.createRow(1);
             productRow.createCell(0).setCellValue("무선 마우스");
             productRow.createCell(1).setCellValue("디지털/가전");
+            productRow.createCell(5).setCellValue("https://example.com/mouse.jpg");
             sheet.createRow(2).createCell(1).setCellValue("상품명 없음");
 
             ProductExcelSheetProcessor.ProductExcelSheetContext context = processor.prepareSheet(
@@ -50,6 +52,7 @@ class ProductExcelSheetProcessorTest {
             assertEquals(1, rows.getFirst().rowId());
             assertEquals("무선 마우스", rows.getFirst().productName());
             assertEquals("디지털/가전", rows.getFirst().category());
+            assertEquals("https://example.com/mouse.jpg", rows.getFirst().imageUrl());
         }
     }
 

@@ -8,6 +8,8 @@ import com.be.trainingproduct.dto.ProductFeedbackBatchAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
+import com.be.trainingproduct.dto.ProductIndexAppendAiResponse;
+import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -116,41 +118,33 @@ public class TrainingProductAiClient {
         }
     }
 
-    public ProductFeedbackAiResponse addProductFeedbacks(ProductFeedbackBatchAiRequest request) {
-        try {
-            byte[] responseBody = restClient().post()
-                    .uri("/ai/categories/product-index/feedback/batch")
-                    .accept(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .exchange((httpRequest, response) -> readResponseBytes(response));
-            ProductFeedbackAiResponse response = readJsonResponse(responseBody, ProductFeedbackAiResponse.class);
-            if (response == null) {
-                throw new BusinessException(
-                        ErrorCode.CATEGORY_MATCHING_FAILED,
-                        "AI 서버에서 피드백 처리 결과를 받지 못했습니다."
-                );
-            }
-            return response;
-        } catch (RestClientResponseException error) {
-            throw new BusinessException(
-                    ErrorCode.CATEGORY_MATCHING_FAILED,
-                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeResponse(error)
-            );
-        } catch (AiServerResponseException error) {
-            throw new BusinessException(
-                    ErrorCode.CATEGORY_MATCHING_FAILED,
-                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeAiServerResponse(error)
-            );
-        } catch (RestClientException error) {
-            throw new BusinessException(
-                    ErrorCode.CATEGORY_MATCHING_FAILED,
-                    "기존 상품 인덱스에 피드백을 반영하지 못했습니다: " + summarizeMessage(error)
-            );
-        }
-    }
 
     private RestClient restClient() {
         return restClientBuilder.baseUrl(aiServerProperties.baseUrl()).build();
+    }
+
+    public ProductIndexAppendAiResponse appendProducts(ProductFeedbackBatchAiRequest request) {
+        try {
+            byte[] body = restClient().post().uri("/ai/categories/product-index/append")
+                    .contentType(MediaType.APPLICATION_JSON).body(request)
+                    .exchange((httpRequest, response) -> readResponseBytes(response));
+            ProductIndexAppendAiResponse result = readJsonResponse(body, ProductIndexAppendAiResponse.class);
+            if (result == null) throw new IllegalStateException("AI 서버 추가 결과가 비어 있습니다.");
+            return result;
+        } catch (AiServerResponseException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, summarizeAiServerResponse(error));
+        } catch (RestClientException | IllegalStateException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, summarizeMessage(error));
+        }
+    }
+
+    public ProductCategoryStatsResponse getSharedCategoryStats() {
+        try {
+            return restClient().get().uri("/ai/categories/product-index/stats")
+                    .retrieve().body(ProductCategoryStatsResponse.class);
+        } catch (RestClientException error) {
+            throw new BusinessException(ErrorCode.CATEGORY_MATCHING_FAILED, summarizeMessage(error));
+        }
     }
 
     private RestClient rebuildRestClient() {
