@@ -6,7 +6,6 @@ import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.mycategory.service.MyCategoryMappingUploadService;
 import com.be.trainingproduct.domain.ProductCategoryFeedback;
-import com.be.trainingproduct.domain.ProductCategoryStat;
 import com.be.trainingproduct.client.TrainingProductAiClient;
 import com.be.trainingproduct.dto.CategoryMatchMappingItem;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
@@ -24,7 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -104,15 +102,14 @@ public class TrainingProductService {
         if (mappings.isEmpty()) {
             throw invalid("업로드한 마이카테고리 파일에 유효한 네이버 카테고리 매핑이 없습니다.");
         }
-        List<ProductCategoryStat> stats = collectCategoryStats(userId, files, resolvedMappings);
         ProductIndexRebuildResponse response = trainingProductAiClient.rebuildProductIndex(userId, files, mappings);
-        productCategoryStatService.replaceStats(userId, stats);
         return response;
     }
 
     public ProductCategoryStatsResponse getCategoryStats(Long userId) {
         validateUserId(userId);
-        return productCategoryStatService.getStats(userId);
+        validateUserId(userId);
+        return trainingProductAiClient.getSharedCategoryStats();
     }
 
     public ProductIndexAppendResponse appendProducts(
@@ -135,44 +132,19 @@ public class TrainingProductService {
             throw invalid("기존 상품 인덱스에 추가할 수 있는 유효 상품 행이 없습니다.");
         }
 
-        int indexedProductCount = 0;
-        int insertedProductCount = 0;
-        int updatedProductCount = 0;
         List<ProductFeedbackAiRequest> aiRequests = new ArrayList<>();
         for (ProductAppendCandidate candidate : rows.candidates()) {
-            String normalizedProductName = normalizeProductName(candidate.productName());
-            String normalizedProductKey = normalizedProductKey(normalizedProductName);
-            ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
-                    .findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(userId, normalizedProductKey)
-                    .orElse(null);
-            ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
+            aiRequests.add(new ProductFeedbackAiRequest(
                     userId,
                     candidate.productName(),
-                    normalizedProductName,
-                    normalizedProductKey,
-                    candidate.mapping().getMyCategoryCode(),
                     candidate.mapping().getNaverCategoryId(),
                     candidate.mapping().getNaverCategoryCode(),
-                    candidate.mapping().getNaverCategoryFullPath(),
-                    Instant.now()
+                    candidate.mapping().getNaverCategoryFullPath()
             ));
-            aiRequests.add(ProductFeedbackAiRequest.from(feedback));
-            if (previousFeedback == null) {
-                productCategoryStatService.increaseStat(userId, candidate.mapping());
-                insertedProductCount++;
-            } else {
-                productCategoryStatService.moveStat(
-                        userId,
-                        previousFeedback.getNaverCategoryCode(),
-                        candidate.mapping()
-                );
-                updatedProductCount++;
-            }
         }
-        ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedbacks(
+        var aiResponse = trainingProductAiClient.appendProducts(
                 new ProductFeedbackBatchAiRequest(userId, aiRequests)
         );
-        indexedProductCount = aiResponse.indexedProductCount();
 
         return new ProductIndexAppendResponse(
                 files.size(),
@@ -180,9 +152,9 @@ public class TrainingProductService {
                 rows.candidates().size(),
                 rows.unmappedRowCount(),
                 rows.candidates().size(),
-                insertedProductCount,
-                updatedProductCount,
-                indexedProductCount,
+                aiResponse.insertedProductCount(),
+                aiResponse.updatedProductCount(),
+                aiResponse.indexedProductCount(),
                 "기존 상품 인덱스에 상품을 추가했습니다."
         );
     }
@@ -272,94 +244,6 @@ public class TrainingProductService {
         return new ProductAppendRows(sourceRowCount, unmappedRowCount, candidates);
     }
 
-    private List<ProductCategoryStat> collectCategoryStats(
-            Long userId,
-            List<MultipartFile> files,
-            List<MyCategoryMapping> resolvedMappings
-    ) {
-        Map<String, MyCategoryMapping> mappingsByMyCategory = new HashMap<>();
-        for (MyCategoryMapping mapping : resolvedMappings) {
-            mappingsByMyCategory.put(mapping.getMyCategoryCode(), mapping);
-        }
-
-        Map<String, Map<String, MyCategoryMapping>> mappingsByProductName = new HashMap<>();
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        for (MultipartFile file : files) {
-            collectCategoryStats(file, mappingsByMyCategory, mappingsByProductName, formatter);
-        }
-
-        Map<String, CategoryCount> countsByCategoryCode = countCategories(mappingsByProductName);
-        Instant updatedAt = Instant.now();
-        return countsByCategoryCode.values()
-                .stream()
-                .sorted(Comparator
-                        .comparingLong(CategoryCount::productCount)
-                        .reversed()
-                        .thenComparing(CategoryCount::naverCategoryFullPath))
-                .map(count -> ProductCategoryStat.create(
-                        userId,
-                        count.naverCategoryId(),
-                        count.naverCategoryCode(),
-                        count.naverCategoryFullPath(),
-                        count.productCount(),
-                        updatedAt
-                ))
-                .toList();
-    }
-
-    private void collectCategoryStats(
-            MultipartFile file,
-            Map<String, MyCategoryMapping> mappingsByMyCategory,
-            Map<String, Map<String, MyCategoryMapping>> mappingsByProductName,
-            DataFormatter formatter
-    ) {
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
-            TrainingProductColumns columns = resolveColumns(sheet, formatter);
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    continue;
-                }
-
-                String productName = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
-                if (productName.isBlank()) {
-                    continue;
-                }
-
-                String normalizedProductName = normalizeProductName(productName);
-                if (normalizedProductName.isBlank()) {
-                    continue;
-                }
-
-                String myCategoryCode = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
-                MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
-                if (mapping == null) {
-                    continue;
-                }
-
-                mappingsByProductName
-                        .computeIfAbsent(normalizedProductName, ignored -> new HashMap<>())
-                        .putIfAbsent(mapping.getNaverCategoryCode(), mapping);
-            }
-        } catch (IOException e) {
-            throw invalid("기존 상품 엑셀 파일을 읽지 못했습니다.");
-        }
-    }
-
-    private Map<String, CategoryCount> countCategories(
-            Map<String, Map<String, MyCategoryMapping>> mappingsByProductName
-    ) {
-        Map<String, CategoryCount> countsByCategoryCode = new HashMap<>();
-        for (Map<String, MyCategoryMapping> mappingsByCategory : mappingsByProductName.values()) {
-            for (MyCategoryMapping mapping : mappingsByCategory.values()) {
-                countsByCategoryCode
-                        .computeIfAbsent(mapping.getNaverCategoryCode(), ignored -> CategoryCount.from(mapping))
-                        .increment();
-            }
-        }
-        return countsByCategoryCode;
-    }
 
     private TrainingProductColumns resolveColumns(Sheet sheet, DataFormatter formatter) {
         Row headerRow = sheet.getRow(0);
@@ -447,50 +331,6 @@ public class TrainingProductService {
         return new BusinessException(ErrorCode.INVALID_TRAINING_PRODUCT_FILE, message);
     }
 
-    private static class CategoryCount {
-        private final Long naverCategoryId;
-        private final String naverCategoryCode;
-        private final String naverCategoryFullPath;
-        private long productCount;
-
-        private CategoryCount(
-                Long naverCategoryId,
-                String naverCategoryCode,
-                String naverCategoryFullPath
-        ) {
-            this.naverCategoryId = naverCategoryId;
-            this.naverCategoryCode = naverCategoryCode;
-            this.naverCategoryFullPath = naverCategoryFullPath;
-        }
-
-        private static CategoryCount from(MyCategoryMapping mapping) {
-            return new CategoryCount(
-                    mapping.getNaverCategoryId(),
-                    mapping.getNaverCategoryCode(),
-                    mapping.getNaverCategoryFullPath()
-            );
-        }
-
-        private void increment() {
-            productCount++;
-        }
-
-        private Long naverCategoryId() {
-            return naverCategoryId;
-        }
-
-        private String naverCategoryCode() {
-            return naverCategoryCode;
-        }
-
-        private String naverCategoryFullPath() {
-            return naverCategoryFullPath;
-        }
-
-        private long productCount() {
-            return productCount;
-        }
-    }
 
     private record ProductAppendRows(
             int sourceRowCount,

@@ -479,7 +479,8 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 | `POST /ai/categories/predict` | 상품명 배치 카테고리 예측 |
 | `POST /ai/categories/product-index/rebuild` | 기존 상품 인덱스 재생성 |
 | `POST /ai/categories/product-index/feedback` | 단건 피드백 |
-| `POST /ai/categories/product-index/feedback/batch` | 추가 상품 일괄 피드백 |
+| `POST /ai/categories/product-index/append` | 공유 인덱스 기준 추가·갱신, 상품별 피드백 DB 조회·저장 없음 |
+| `GET /ai/categories/product-index/stats` | 공유 인덱스의 고유 상품 수·카테고리별 통계 |
 
 기본 RestClient 연결 타임아웃은 2초, 읽기 타임아웃은 5분입니다. **기존 상품 인덱스 재생성 호출만 읽기 타임아웃 10분**을 사용합니다. 이는 BE→AI HTTP 호출 설정이며 프록시나 브라우저 제한을 함께 변경하지 않습니다.
 
