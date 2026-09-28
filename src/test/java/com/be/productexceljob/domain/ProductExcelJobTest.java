@@ -31,7 +31,13 @@ class ProductExcelJobTest {
         assertEquals(1_250L, job.getCategoryElapsedMillis());
         assertEquals(340L, job.getKeywordElapsedMillis());
 
-        job.markCompleted("result.xlsx", "1/result.xlsx", Instant.now());
+        job.markCompleted(
+                "result.xlsx",
+                "1/result.xlsx",
+                "admin-result.xlsx",
+                "1/admin-result.xlsx",
+                Instant.now()
+        );
 
         assertEquals(ProductExcelJobStatus.COMPLETED, job.getStatus());
         assertEquals(100, job.getProgress());

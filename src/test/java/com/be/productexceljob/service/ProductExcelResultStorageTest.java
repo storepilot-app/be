@@ -39,7 +39,8 @@ class ProductExcelResultStorageTest {
         Instant completedAt = Instant.parse("2026-09-28T00:00:00Z");
         ProductExcelJob job = repository.saveAndFlush(newJob());
         String path = storage.save(job.getJobId(), new byte[]{1, 2, 3});
-        job.markCompleted("result.xlsx", path, completedAt);
+        String adminPath = storage.saveAdmin(job.getJobId(), new byte[]{4, 5, 6});
+        job.markCompleted("result.xlsx", path, "admin-result.xlsx", adminPath, completedAt);
         repository.saveAndFlush(job);
         entityManager.clear();
         Instant expiry = completedAt.plus(Duration.ofDays(7));
@@ -50,6 +51,7 @@ class ProductExcelResultStorageTest {
         entityManager.clear();
 
         assertThat(Files.exists(directory.resolve("product-excel-results").resolve(path))).isFalse();
+        assertThat(Files.exists(directory.resolve("product-excel-results").resolve(adminPath))).isFalse();
         ProductExcelJob expired = repository.findById(job.getJobId()).orElseThrow();
         assertThat(expired.getStatus()).isEqualTo(ProductExcelJobStatus.COMPLETED);
         assertThat(expired.getResultDeletedAt()).isEqualTo(expiry);
@@ -66,7 +68,13 @@ class ProductExcelResultStorageTest {
         processing.markProcessing();
         repository.saveAndFlush(processing);
         ProductExcelJob completed = repository.saveAndFlush(newJob());
-        completed.markCompleted("result.xlsx", completed.getJobId() + "/result.xlsx", now.minus(Duration.ofDays(8)));
+        completed.markCompleted(
+                "result.xlsx",
+                completed.getJobId() + "/result.xlsx",
+                "admin-result.xlsx",
+                completed.getJobId() + "/admin-result.xlsx",
+                now.minus(Duration.ofDays(8))
+        );
         repository.saveAndFlush(completed);
         entityManager.clear();
 
@@ -101,7 +109,13 @@ class ProductExcelResultStorageTest {
         Instant now = Instant.now();
         ProductExcelJob job = repository.saveAndFlush(newJob());
         String path = job.getJobId() + "/result.xlsx";
-        job.markCompleted("result.xlsx", path, now.minus(Duration.ofDays(8)));
+        job.markCompleted(
+                "result.xlsx",
+                path,
+                "admin-result.xlsx",
+                job.getJobId() + "/admin-result.xlsx",
+                now.minus(Duration.ofDays(8))
+        );
         repository.saveAndFlush(job);
         entityManager.clear();
         Path obstructed = directory.resolve("product-excel-results").resolve(path);

@@ -40,7 +40,13 @@ class ProductExcelJobRepositoryTest {
         assertThat(progress.getUploadedFilePath()).isEqualTo(Path.of("uploads", "input.xlsx"));
         entityManager.clear();
 
-        job.markCompleted("result.xlsx", jobId + "/result.xlsx", Instant.now());
+        job.markCompleted(
+                "result.xlsx",
+                jobId + "/result.xlsx",
+                "admin-result.xlsx",
+                jobId + "/admin-result.xlsx",
+                Instant.now()
+        );
         repository.saveAndFlush(job);
         entityManager.clear();
 

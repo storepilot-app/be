@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ProductExcelProcessingResult;
 import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
 import com.be.userusage.service.UserUsageService;
@@ -40,6 +41,7 @@ class ProductExcelJobServiceTest {
             ProductExcelJob job = invocation.getArgument(0);
             ReflectionTestUtils.setField(job, "jobId", 1L);
             when(repository.findByJobIdAndUserId(1L, 1L)).thenReturn(Optional.of(job));
+            when(repository.findById(1L)).thenReturn(Optional.of(job));
             return job;
         });
         ProductExcelResultStorage storage = new ProductExcelResultStorage(repository);
@@ -60,7 +62,10 @@ class ProductExcelJobServiceTest {
         when(processingService.processExcel(any(), any())).thenAnswer(invocation -> {
             ProductExcelJobProgressUpdater progressUpdater = invocation.getArgument(1);
             progressUpdater.update(3, 3, "결과 엑셀 생성 중");
-            return new ExcelDownloadResult("result.xlsx", new byte[]{1});
+            return new ProductExcelProcessingResult(
+                    new ExcelDownloadResult("result.xlsx", new byte[]{1}),
+                    new ExcelDownloadResult("admin-result.xlsx", new byte[]{2})
+            );
         });
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -77,6 +82,7 @@ class ProductExcelJobServiceTest {
         assertThat(Files.exists(job.getUploadedFilePath())).isFalse();
         assertThat(service.getExcelDownloadResult(1L, 1L).content()).containsExactly(1);
         assertThat(service.getExcelDownloadResult(1L, 1L).content()).containsExactly(1);
+        assertThat(service.getAdminExcelDownloadResult(1L).content()).containsExactly(2);
         ReflectionTestUtils.setField(job, "resultExpiresAt", Instant.now().minusSeconds(1));
         assertThatThrownBy(() -> service.getExcelDownloadResult(1L, 1L))
                 .isInstanceOfSatisfying(BusinessException.class,

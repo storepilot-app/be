@@ -141,7 +141,7 @@ AI 서버가 예측한 네이버 카테고리를 사용자가 등록한 마이�
 - 예측 결과와 카테고리를 Map으로 관리하고, 예측된 카테고리 코드에 해당하는 사용자 매핑을 일괄 조회합니다.
 - 매핑 성공, 네이버 카테고리 예측 실패, 사용자 마이카테 매핑 없음으로 결과를 구분합니다.
 
-관리자는 선택 과정 확인 옵션을 통해 유사상품·카테고리 후보·LLM 판단 상태를 결과 엑셀에서 확인할 수 있습니다. 해당 옵션은 백엔드에서도 관리자 권한을 검증합니다.
+각 작업은 일반 결과와 함께 유사상품·카테고리 후보·LLM 판단 상태가 포함된 관리자용 결과를 생성합니다. 관리자용 결과는 관리자 API에서만 조회하고 다운로드할 수 있습니다.
 
 관련 코드: [카테고리 매칭](src/main/java/com/be/categorymatcher/service/CategoryMatcherService.java), [배치 처리](src/main/java/com/be/categorymatcher/service/CategoryPredictionBatchProcessor.java)
 
@@ -225,6 +225,7 @@ AI 서버가 예측한 네이버 카테고리를 사용자가 등록한 마이�
 | 매핑 | `GET /my-category-mappings`, `POST /my-category-mappings/upload` | 조회·교체 |
 | 엑셀 작업 | `POST /product-excel-jobs` | `file`, `includeSelectionDetails`로 작업 생성 |
 | 엑셀 작업 | `GET /product-excel-jobs/results`, `/{jobId}/status`, `/{jobId}/download` | 내 완료 결과 목록·작업 상태·결과 다운로드 |
+| 관리자 엑셀 결과 | `GET /admin/product-excel-jobs/results`, `/{jobId}/download` | 전체 사용자 결과 목록·선택 과정 포함 결과 다운로드 |
 | 이미지 | `POST /product-excel-jobs/images/prepare`, `/download`, `/failures/excel` | 목록·단건 다운로드·실패 엑셀 |
 | 워터마크 | `GET`, `PUT`, `DELETE /users/me/watermark`, `GET /users/me/watermark/image` | 설정 및 이미지 관리 |
 | 학습 요청 | `POST`, `GET /training-product-requests` | 파일 접수·내 목록 |
@@ -494,7 +495,7 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 | 사용자·토큰·매핑·카테고리·문의·학습 요청 메타데이터·사용량 | MySQL |
 | 워터마크 이미지 | MySQL `user_watermarks.image_data` |
 | 엑셀 작업 상태·결과 경로·만료 시각 | MySQL `product_excel_jobs` — 결과 삭제 후에도 작업 이력 유지 |
-| 결과 엑셀 | `uploads/product-excel-results/{jobId}/result.xlsx` — 완료 후 7일 보관 |
+| 결과 엑셀 | `uploads/product-excel-results/{jobId}/result.xlsx`, `admin-result.xlsx` — 완료 후 7일 보관 |
 | 작업 원본 | `uploads/product-excel-jobs/{UUID}/` — 처리 종료 시 삭제 |
 | 학습 요청 원본 | `uploads/training-product-requests/` — 관리자 삭제까지 보관 |
 | 네이버 카테고리 원본 | `uploads/naver-categories/versions/` — 최근 버전 디렉터리 5개 유지 |

@@ -2,6 +2,7 @@ package com.be.productexceljob.repository;
 
 import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.dto.ProductExcelJobResultResponse;
+import com.be.productexceljob.dto.AdminProductExcelJobResultResponse;
 import java.util.Optional;
 import java.util.List;
 import java.time.Instant;
@@ -38,6 +39,31 @@ public interface ProductExcelJobRepository extends JpaRepository<ProductExcelJob
     );
 
     @Query("""
+            select new com.be.productexceljob.dto.AdminProductExcelJobResultResponse(
+                j.jobId,
+                j.userId,
+                u.email,
+                j.originalFilename,
+                j.adminResultFilename,
+                j.productCount,
+                j.completedAt,
+                j.resultExpiresAt,
+                case when j.resultDeletedAt is not null
+                    or (j.resultExpiresAt is not null and j.resultExpiresAt <= :now)
+                    then true else false end
+            )
+            from ProductExcelJob j, StorePilotUser u
+            where u.id = j.userId
+              and j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+              and j.adminResultFilename is not null
+            order by j.createdAt desc
+            """)
+    List<AdminProductExcelJobResultResponse> findRecentCompletedAdminResults(
+            @Param("now") Instant now,
+            Pageable pageable
+    );
+
+    @Query("""
             select j.jobId from ProductExcelJob j
             where j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
               and j.resultExpiresAt <= :now and j.resultDeletedAt is null
@@ -48,7 +74,7 @@ public interface ProductExcelJobRepository extends JpaRepository<ProductExcelJob
     @Modifying
     @Query("""
             update ProductExcelJob j set j.resultDeletedAt = :now,
-                j.resultFilePath = null, j.resultContent = null
+                j.resultFilePath = null, j.adminResultFilePath = null, j.resultContent = null
             where j.jobId = :jobId
               and j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
               and j.resultExpiresAt <= :now and j.resultDeletedAt is null

@@ -46,6 +46,9 @@ public class ProductExcelJob {
     private volatile String resultFilename;
     @Column(length = 2048)
     private String resultFilePath;
+    private volatile String adminResultFilename;
+    @Column(length = 2048)
+    private String adminResultFilePath;
     private Instant completedAt;
     private Instant resultExpiresAt;
     private Instant resultDeletedAt;
@@ -114,9 +117,17 @@ public class ProductExcelJob {
         }
     }
 
-    public synchronized void markCompleted(String resultFilename, String resultFilePath, Instant completedAt) {
+    public synchronized void markCompleted(
+            String resultFilename,
+            String resultFilePath,
+            String adminResultFilename,
+            String adminResultFilePath,
+            Instant completedAt
+    ) {
         this.resultFilename = resultFilename;
         this.resultFilePath = resultFilePath;
+        this.adminResultFilename = adminResultFilename;
+        this.adminResultFilePath = adminResultFilePath;
         this.resultContent = null;
         this.completedAt = completedAt;
         this.resultExpiresAt = completedAt.plus(Duration.ofDays(7));
@@ -141,6 +152,7 @@ public class ProductExcelJob {
 
     public synchronized void markFailed(String message) {
         this.resultFilePath = null;
+        this.adminResultFilePath = null;
         this.resultContent = null;
         this.completedAt = null;
         this.resultExpiresAt = null;

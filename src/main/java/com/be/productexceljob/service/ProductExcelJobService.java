@@ -8,6 +8,8 @@ import com.be.productexceljob.domain.ProductExcelJobStatus;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
 import com.be.productexceljob.dto.ProductExcelJobResultResponse;
+import com.be.productexceljob.dto.AdminProductExcelJobResultResponse;
+import com.be.productexceljob.dto.ProductExcelProcessingResult;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
 import com.be.userusage.service.UserUsageService;
 import java.io.IOException;
@@ -97,6 +99,13 @@ public class ProductExcelJobService {
         );
     }
 
+    public List<AdminProductExcelJobResultResponse> getRecentAdminExcelResults() {
+        return productExcelJobRepository.findRecentCompletedAdminResults(
+                Instant.now(),
+                PageRequest.of(0, 100)
+        );
+    }
+
     public ExcelDownloadResult getExcelDownloadResult(long jobId, Long userId) {
         ProductExcelJob job = findExcelJob(jobId, userId);
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
@@ -121,13 +130,38 @@ public class ProductExcelJobService {
                 "결과 파일을 읽을 수 없습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.");
     }
 
+    public ExcelDownloadResult getAdminExcelDownloadResult(long jobId) {
+        ProductExcelJob job = productExcelJobRepository.findById(jobId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
+        if (job.getStatus() != ProductExcelJobStatus.COMPLETED
+                || job.getAdminResultFilename() == null
+                || job.getAdminResultFilePath() == null) {
+            throw new BusinessException(ErrorCode.JOB_NOT_COMPLETED, "다운로드할 관리자용 결과가 없습니다.");
+        }
+        if (job.isResultExpired(Instant.now())) {
+            throw new BusinessException(ErrorCode.JOB_RESULT_EXPIRED,
+                    "결과 파일의 보관 기간이 만료되었습니다.");
+        }
+        try {
+            return new ExcelDownloadResult(
+                    job.getAdminResultFilename(),
+                    resultStorage.read(job.getAdminResultFilePath())
+            );
+        } catch (IOException error) {
+            log.warn("관리자용 결과 엑셀 읽기 실패: jobId={}", jobId, error);
+            throw new BusinessException(ErrorCode.JOB_RESULT_UNAVAILABLE,
+                    "관리자용 결과 파일을 읽을 수 없습니다.");
+        }
+    }
+
     private void processExcelJob(ProductExcelJob job) {
         String savedResultPath = null;
+        String savedAdminResultPath = null;
         try {
             job.markProcessing();
             productExcelJobRepository.save(job);
             ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job, productExcelJobRepository);
-            ExcelDownloadResult result = productExcelProcessingService.processExcel(
+            ProductExcelProcessingResult processingResult = productExcelProcessingService.processExcel(
                     new ProductExcelProcessingRequest(
                             job.getUploadedFilePath(),
                             job.getOriginalFilename(),
@@ -139,15 +173,25 @@ public class ProductExcelJobService {
                     ),
                     progressUpdater
             );
+            ExcelDownloadResult result = processingResult.userResult();
+            ExcelDownloadResult adminResult = processingResult.adminResult();
             savedResultPath = resultStorage.save(job.getJobId(), result.content());
+            savedAdminResultPath = resultStorage.saveAdmin(job.getJobId(), adminResult.content());
             String resultPath = savedResultPath;
+            String adminResultPath = savedAdminResultPath;
             new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
                 userUsageService.completeCategoryKeywordJob(
                         job.getUserId(),
                         job.getUsageDate(),
                         job.getProductCount()
                 );
-                job.markCompleted(result.filename(), resultPath, Instant.now());
+                job.markCompleted(
+                        result.filename(),
+                        resultPath,
+                        adminResult.filename(),
+                        adminResultPath,
+                        Instant.now()
+                );
                 productExcelJobRepository.save(job);
             });
         } catch (Exception error) {
@@ -156,6 +200,13 @@ public class ProductExcelJobService {
                     resultStorage.delete(savedResultPath);
                 } catch (IOException cleanupError) {
                     log.warn("실패한 작업 결과 파일 삭제 실패: jobId={}", job.getJobId(), cleanupError);
+                }
+            }
+            if (savedAdminResultPath != null) {
+                try {
+                    resultStorage.delete(savedAdminResultPath);
+                } catch (IOException cleanupError) {
+                    log.warn("실패한 관리자용 결과 파일 삭제 실패: jobId={}", job.getJobId(), cleanupError);
                 }
             }
             releaseReservedProducts(job.getUserId(), job.getUsageDate(), job.getProductCount(), null);

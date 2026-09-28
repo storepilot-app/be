@@ -24,7 +24,15 @@ public class ProductExcelResultStorage {
     private String uploadDir;
 
     public String save(long jobId, byte[] content) throws IOException {
-        String relativePath = jobId + "/result.xlsx";
+        return save(jobId, "result.xlsx", content);
+    }
+
+    public String saveAdmin(long jobId, byte[] content) throws IOException {
+        return save(jobId, "admin-result.xlsx", content);
+    }
+
+    private String save(long jobId, String filename, byte[] content) throws IOException {
+        String relativePath = jobId + "/" + filename;
         Path target = resolve(relativePath);
         Files.createDirectories(target.getParent());
         Path temporary = Files.createTempFile(target.getParent(), "result-", ".tmp");
@@ -71,6 +79,9 @@ public class ProductExcelResultStorage {
                 }
                 if (job.getResultFilePath() != null) {
                     delete(job.getResultFilePath());
+                }
+                if (job.getAdminResultFilePath() != null) {
+                    delete(job.getAdminResultFilePath());
                 }
                 repository.markResultDeleted(jobId, now);
             } catch (Exception error) {
