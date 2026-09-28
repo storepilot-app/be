@@ -18,6 +18,9 @@ public class ApiExceptionHandler {
     }
 
     private HttpStatus resolveStatus(ErrorCode errorCode) {
+        if (errorCode == ErrorCode.JOB_RESULT_EXPIRED) {
+            return HttpStatus.GONE;
+        }
         if (errorCode == ErrorCode.INVALID_EXCEL_FILE
                 || errorCode == ErrorCode.INVALID_NAVER_CATEGORY_FILE
                 || errorCode == ErrorCode.INVALID_MY_CATEGORY_MAPPING_FILE

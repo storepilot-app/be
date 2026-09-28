@@ -8,6 +8,7 @@ import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
 import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.dto.ProductExcelProcessingResult;
 import com.be.keyword.KeywordDetailEntry;
 import com.be.productexceljob.service.ProductExcelSheetProcessor.ProductExcelRow;
 import com.be.productexceljob.service.ProductExcelSheetProcessor.ProductExcelSheetContext;
@@ -34,7 +35,7 @@ public class ProductExcelProcessingService {
     private final ProductExcelSheetProcessor productExcelSheetProcessor;
     private final ProductKeywordGenerator productKeywordGenerator;
 
-    ExcelDownloadResult processExcel(
+    ProductExcelProcessingResult processExcel(
             ProductExcelProcessingRequest request,
             ProductExcelJobProgressUpdater progressUpdater
     ) {
@@ -50,14 +51,12 @@ public class ProductExcelProcessingService {
     }
 
     // 실제 처리 로직
-    private ExcelDownloadResult processExcel(
+    private ProductExcelProcessingResult processExcel(
             InputStream inputStream,
             ProductExcelProcessingRequest request,
             ProductExcelJobProgressUpdater progressUpdater
     ) {
-        try (Workbook workbook = WorkbookFactory.create(inputStream);
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) //AutoCloseable 객체 try문이 끝나면 자동으로 닫힘
-        {
+        try (Workbook workbook = WorkbookFactory.create(inputStream)) {
             ProductExcelSheetContext sheetContext = productExcelSheetProcessor.prepareSheet(
                     workbook,
                     request.productNameColumn(),
@@ -75,7 +74,7 @@ public class ProductExcelProcessingService {
                     progressUpdater
             );
 
-            List<KeywordDetailEntry> keywordDetails = writeKeywordsAndResults(
+            PreparedProductResults preparedResults = writeKeywordsAndResults(
                     productRows,
                     myCategoryResults,
                     resolvedKeywordCount,
@@ -91,14 +90,52 @@ public class ProductExcelProcessingService {
                         myCategoryResults
                 );
             }
-            productExcelSheetProcessor.writeKeywordDetails(workbook, keywordDetails);
+            productExcelSheetProcessor.writeKeywordDetails(workbook, preparedResults.keywordDetails());
 
             progressUpdater.update(productRows.size(), productRows.size(), "결과 엑셀 생성 중");
-            workbook.write(outputStream);
             String filename = buildDownloadFilename(request.originalFilename());
-            return new ExcelDownloadResult(filename, outputStream.toByteArray());
+            ExcelDownloadResult userResult = new ExcelDownloadResult(filename, writeWorkbook(workbook));
+            if (request.includeSelectionDetails()) {
+                ExcelDownloadResult adminResult = new ExcelDownloadResult(
+                        buildAdminDownloadFilename(request.originalFilename()),
+                        userResult.content()
+                );
+                return new ProductExcelProcessingResult(userResult, adminResult);
+            }
+
+            ProductExcelSheetContext adminSheetContext = productExcelSheetProcessor.prepareSheet(
+                    workbook,
+                    request.productNameColumn(),
+                    request.categoryColumn(),
+                    true
+            );
+            productExcelSheetProcessor.writeProductResultRows(
+                    productRows,
+                    myCategoryResults,
+                    preparedResults.keywordCategories(),
+                    preparedResults.keywordsByRow(),
+                    adminSheetContext,
+                    true
+            );
+            productExcelSheetProcessor.writeUnmatchedOrRejectedRatio(
+                    adminSheetContext,
+                    productRows,
+                    myCategoryResults
+            );
+            ExcelDownloadResult adminResult = new ExcelDownloadResult(
+                    buildAdminDownloadFilename(request.originalFilename()),
+                    writeWorkbook(workbook)
+            );
+            return new ProductExcelProcessingResult(userResult, adminResult);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "Failed to process excel file.");
+        }
+    }
+
+    private byte[] writeWorkbook(Workbook workbook) throws IOException {
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
         }
     }
 
@@ -123,7 +160,7 @@ public class ProductExcelProcessingService {
         return myCategoryResults;
     }
 
-    private List<KeywordDetailEntry> writeKeywordsAndResults(
+    private PreparedProductResults writeKeywordsAndResults(
             List<ProductExcelRow> productRows,
             Map<Integer, MyCategoryMatchResult> myCategoryResults,
             int resolvedKeywordCount,
@@ -154,7 +191,7 @@ public class ProductExcelProcessingService {
                 includeSelectionDetails
         );
         progressUpdater.recordKeywordCompleted(elapsedMillis(keywordStartedAt));
-        return keywordDetails;
+        return new PreparedProductResults(keywordDetails, keywordCategories, keywordsByRow);
     }
 
     private long elapsedMillis(long startedAtNanos) {
@@ -182,5 +219,20 @@ public class ProductExcelProcessingService {
                 : originalFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
         String filename = "keyword_result_" + baseName;
         return URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private String buildAdminDownloadFilename(String originalFilename) {
+        String baseName = originalFilename == null || originalFilename.isBlank()
+                ? "input.xlsx"
+                : originalFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
+        String filename = "selection_details_" + baseName;
+        return URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private record PreparedProductResults(
+            List<KeywordDetailEntry> keywordDetails,
+            Map<Integer, String> keywordCategories,
+            Map<Integer, List<GeneratedKeyword>> keywordsByRow
+    ) {
     }
 }

@@ -1,30 +1,92 @@
 package com.be.productexceljob.repository;
 
 import com.be.productexceljob.domain.ProductExcelJob;
-import java.util.Map;
+import com.be.productexceljob.dto.ProductExcelJobResultResponse;
+import com.be.productexceljob.dto.AdminProductExcelJobResultResponse;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
+import java.util.List;
+import java.time.Instant;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Pageable;
 
-@Repository
-public class ProductExcelJobRepository {
-    private final Map<Long, ProductExcelJob> jobs = new ConcurrentHashMap<>();
+public interface ProductExcelJobRepository extends JpaRepository<ProductExcelJob, Long> {
+    Optional<ProductExcelJob> findByJobIdAndUserId(long jobId, Long userId);
 
-    public ProductExcelJob save(ProductExcelJob job) {
-        jobs.put(job.getJobId(), job);
-        return job;
-    }
+    @Query("""
+            select new com.be.productexceljob.dto.ProductExcelJobResultResponse(
+                j.jobId,
+                j.resultFilename,
+                j.productCount,
+                j.completedAt,
+                j.resultExpiresAt,
+                case when j.resultDeletedAt is not null
+                    or (j.resultExpiresAt is not null and j.resultExpiresAt <= :now)
+                    then true else false end
+            )
+            from ProductExcelJob j
+            where j.userId = :userId
+              and j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+            order by j.createdAt desc
+            """)
+    List<ProductExcelJobResultResponse> findRecentCompletedResults(
+            @Param("userId") Long userId,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
 
-    public void deleteById(long jobId) {
-        jobs.remove(jobId);
-    }
+    @Query("""
+            select new com.be.productexceljob.dto.AdminProductExcelJobResultResponse(
+                j.jobId,
+                j.userId,
+                u.email,
+                j.originalFilename,
+                j.adminResultFilename,
+                j.productCount,
+                j.completedAt,
+                j.resultExpiresAt,
+                case when j.resultDeletedAt is not null
+                    or (j.resultExpiresAt is not null and j.resultExpiresAt <= :now)
+                    then true else false end
+            )
+            from ProductExcelJob j, StorePilotUser u
+            where u.id = j.userId
+              and j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+              and j.adminResultFilename is not null
+            order by j.createdAt desc
+            """)
+    List<AdminProductExcelJobResultResponse> findRecentCompletedAdminResults(
+            @Param("now") Instant now,
+            Pageable pageable
+    );
 
-    public Optional<ProductExcelJob> findById(long jobId) {
-        return Optional.ofNullable(jobs.get(jobId));
-    }
+    @Query("""
+            select j.jobId from ProductExcelJob j
+            where j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+              and j.resultExpiresAt <= :now and j.resultDeletedAt is null
+            """)
+    List<Long> findExpiredResultIds(@Param("now") Instant now);
 
-    public Optional<ProductExcelJob> findByIdAndUserId(long jobId, Long userId) {
-        return findById(jobId)
-                .filter(job -> job.getUserId().equals(userId));
-    }
+    @Transactional
+    @Modifying
+    @Query("""
+            update ProductExcelJob j set j.resultDeletedAt = :now,
+                j.resultFilePath = null, j.adminResultFilePath = null, j.resultContent = null
+            where j.jobId = :jobId
+              and j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+              and j.resultExpiresAt <= :now and j.resultDeletedAt is null
+            """)
+    int markResultDeleted(@Param("jobId") long jobId, @Param("now") Instant now);
+
+    @Transactional
+    @Modifying
+    @Query("""
+            update ProductExcelJob j set j.resultExpiresAt = :expiresAt
+            where j.status = com.be.productexceljob.domain.ProductExcelJobStatus.COMPLETED
+              and j.resultExpiresAt is null and j.resultContent is not null
+            """)
+    int initializeLegacyResultExpiry(@Param("expiresAt") Instant expiresAt);
 }

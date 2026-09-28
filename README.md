@@ -141,7 +141,7 @@ AI 서버가 예측한 네이버 카테고리를 사용자가 등록한 마이�
 - 예측 결과와 카테고리를 Map으로 관리하고, 예측된 카테고리 코드에 해당하는 사용자 매핑을 일괄 조회합니다.
 - 매핑 성공, 네이버 카테고리 예측 실패, 사용자 마이카테 매핑 없음으로 결과를 구분합니다.
 
-관리자는 선택 과정 확인 옵션을 통해 유사상품·카테고리 후보·LLM 판단 상태를 결과 엑셀에서 확인할 수 있습니다. 해당 옵션은 백엔드에서도 관리자 권한을 검증합니다.
+각 작업은 일반 결과와 함께 유사상품·카테고리 후보·LLM 판단 상태가 포함된 관리자용 결과를 생성합니다. 관리자용 결과는 관리자 API에서만 조회하고 다운로드할 수 있습니다.
 
 관련 코드: [카테고리 매칭](src/main/java/com/be/categorymatcher/service/CategoryMatcherService.java), [배치 처리](src/main/java/com/be/categorymatcher/service/CategoryPredictionBatchProcessor.java)
 
@@ -224,7 +224,8 @@ AI 서버가 예측한 네이버 카테고리를 사용자가 등록한 마이�
 | 계정 | `GET /auth/me`, `DELETE /auth/me` | 내 정보·탈퇴 |
 | 매핑 | `GET /my-category-mappings`, `POST /my-category-mappings/upload` | 조회·교체 |
 | 엑셀 작업 | `POST /product-excel-jobs` | `file`, `includeSelectionDetails`로 작업 생성 |
-| 엑셀 작업 | `GET /product-excel-jobs/{jobId}/status`, `/{jobId}/download` | 내 작업 상태·결과 |
+| 엑셀 작업 | `GET /product-excel-jobs/results`, `/{jobId}/status`, `/{jobId}/download` | 내 완료 결과 목록·작업 상태·결과 다운로드 |
+| 관리자 엑셀 결과 | `GET /admin/product-excel-jobs/results`, `/{jobId}/download` | 전체 사용자 결과 목록·선택 과정 포함 결과 다운로드 |
 | 이미지 | `POST /product-excel-jobs/images/prepare`, `/download`, `/failures/excel` | 목록·단건 다운로드·실패 엑셀 |
 | 워터마크 | `GET`, `PUT`, `DELETE /users/me/watermark`, `GET /users/me/watermark/image` | 설정 및 이미지 관리 |
 | 학습 요청 | `POST`, `GET /training-product-requests` | 파일 접수·내 목록 |
@@ -493,8 +494,9 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 | --- | --- |
 | 사용자·토큰·매핑·카테고리·문의·학습 요청 메타데이터·사용량 | MySQL |
 | 워터마크 이미지 | MySQL `user_watermarks.image_data` |
-| 엑셀 작업 상태·결과 바이트 | BE 메모리 (`ConcurrentHashMap`) |
-| 작업 원본 | `uploads/product-excel-jobs/{jobId}/` — 처리 종료 시 삭제 |
+| 엑셀 작업 상태·결과 경로·만료 시각 | MySQL `product_excel_jobs` — 결과 삭제 후에도 작업 이력 유지 |
+| 결과 엑셀 | `uploads/product-excel-results/{jobId}/result.xlsx`, `admin-result.xlsx` — 완료 후 7일 보관 |
+| 작업 원본 | `uploads/product-excel-jobs/{UUID}/` — 처리 종료 시 삭제 |
 | 학습 요청 원본 | `uploads/training-product-requests/` — 관리자 삭제까지 보관 |
 | 네이버 카테고리 원본 | `uploads/naver-categories/versions/` — 최근 버전 디렉터리 5개 유지 |
 | 활성 카테고리 CSV | `uploads/naver-categories/active/naver_categories.csv` |
@@ -504,9 +506,12 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 
 현재 구현의 범위와 개선이 필요한 부분은 다음과 같습니다.
 
-- **작업 영속화:** 재시작 시 작업 상태·결과와 메모리 큐가 사라집니다. 완료 결과의 만료·자동 정리도 없어 장기 실행 시 메모리 사용량이 증가할 수 있습니다.
+- **작업 영속화:** 작업 상태·진행률·결과 경로는 JPA로 DB에 저장하며 ID는 DB에서 생성합니다. 결과 파일은 디스크에 저장하고 완료 시점부터 7일 동안 재다운로드를 허용합니다. Executor의 대기·실행 작업은 재시작 후 자동으로 재개되지 않습니다.
+- **결과 만료:** 기동 1분 후부터 매시간 만료 결과를 정리합니다. 만료 시각부터 다운로드는 HTTP 410으로 거절하며, 실제 파일 삭제는 다음 정리 실행 때 수행합니다. 파일 삭제 성공(이미 없는 파일 포함) 후에만 DB에 삭제 시각을 기록합니다. 삭제 실패는 로그에 남겨 다음 실행에서 재시도합니다. 작업 이력과 사용량은 삭제하지 않습니다.
+- **기존 DB 결과 호환:** 기존 `result_content` 컬럼은 유지합니다. 완료 시각이 없는 기존 결과는 최초 정리 실행부터 7일을 추가로 보장하고, 만료 후 바이트를 제거합니다. 신규 결과는 이 컬럼에 저장하지 않습니다.
+- **배포 경로:** 결과 경로는 업로드 디렉터리 기준 상대 경로입니다. 컨테이너 교체·다중 인스턴스에서 동일 결과를 제공하려면 `storepilot.upload-dir`을 같은 영속 볼륨에 연결해야 합니다.
 - **예약 복구:** 정상 예외 경로에서는 사용량을 반환하지만, 강제 종료나 DB 반환 실패 후 남은 예약을 자동 복구하는 기능은 없습니다.
-- **무중단·다중 인스턴스:** 작업 ID가 프로세스별 `AtomicLong`이고 저장소가 메모리이므로 인스턴스 간 공유와 재시작 복구를 구현해야 안전하게 확장할 수 있습니다.
+- **무중단·다중 인스턴스:** 같은 DB와 결과 저장 볼륨을 사용하는 인스턴스에서 작업 상태와 완료 결과를 조회할 수 있습니다. 안전한 무중단 배포를 위해서는 기존 Executor 작업 종료 대기와 중단 작업 복구 정책이 추가로 필요합니다.
 - **외부 호출과 트랜잭션:** 네이버 카테고리 업로드는 DB·파일·AI 호출을 하나의 흐름에서 수행합니다. DB 롤백이 파일·외부 인덱스까지 원복하지 않으며, 추가 상품 반영도 DB와 AI 사이의 원자성을 보장하지 않습니다.
 - **예측 실패 구분:** 카테고리 예측의 HTTP 예외는 빈 결과로 처리됩니다. AI 장애가 `매칭없음` 결과로 나타나면서 작업은 완료되고 사용량이 기록될 수 있습니다.
 - **DB 변경:** `ddl-auto: update`를 사용하며 Flyway/Liquibase 마이그레이션은 도입하지 않았습니다.

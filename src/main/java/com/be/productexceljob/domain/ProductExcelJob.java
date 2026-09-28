@@ -2,32 +2,62 @@ package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
 import lombok.Getter;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
 
 @Getter
+@Entity
+@Table(name = "product_excel_jobs")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProductExcelJob {
-    private final long jobId;
-    private final Long userId;
-    private final String originalFilename;
-    private final Path uploadedFilePath;
-    private final boolean includeSelectionDetails;
-    private final int productCount;
-    private final LocalDate usageDate;
-    private final Instant createdAt;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long jobId;
+    private Long userId;
+    private String originalFilename;
+    @Column(length = 2048)
+    private String uploadedFilePath;
+    private boolean includeSelectionDetails;
+    private int productCount;
+    private LocalDate usageDate;
+    private Instant createdAt;
+    @Enumerated(EnumType.STRING)
     private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
     private volatile int processedCount;
     private volatile int progress;
     private volatile String stage;
+    @Column(columnDefinition = "text")
     private volatile String message;
     private volatile Long categoryElapsedMillis;
     private volatile Long keywordElapsedMillis;
     private volatile String resultFilename;
+    @Column(length = 2048)
+    private String resultFilePath;
+    private volatile String adminResultFilename;
+    @Column(length = 2048)
+    private String adminResultFilePath;
+    private Instant completedAt;
+    private Instant resultExpiresAt;
+    private Instant resultDeletedAt;
+    // 이전 버전에서 DB에 저장한 결과의 다운로드와 만료 처리를 위한 호환 필드.
+    @Lob
+    @Column(columnDefinition = "longblob")
     private volatile byte[] resultContent;
 
     private ProductExcelJob(
-            long jobId,
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
@@ -35,10 +65,9 @@ public class ProductExcelJob {
             int productCount,
             LocalDate usageDate
     ) {
-        this.jobId = jobId;
         this.userId = userId;
         this.originalFilename = originalFilename;
-        this.uploadedFilePath = uploadedFilePath;
+        this.uploadedFilePath = uploadedFilePath.toString();
         this.includeSelectionDetails = includeSelectionDetails;
         this.productCount = productCount;
         this.usageDate = usageDate;
@@ -50,7 +79,6 @@ public class ProductExcelJob {
     }
 
     public static ProductExcelJob register(
-            long jobId,
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
@@ -59,7 +87,6 @@ public class ProductExcelJob {
             LocalDate usageDate
     ) {
         return new ProductExcelJob(
-                jobId,
                 userId,
                 originalFilename,
                 uploadedFilePath,
@@ -67,6 +94,10 @@ public class ProductExcelJob {
                 productCount,
                 usageDate
         );
+    }
+
+    public Path getUploadedFilePath() {
+        return Path.of(uploadedFilePath);
     }
 
     public synchronized void markProcessing() {
@@ -86,14 +117,29 @@ public class ProductExcelJob {
         }
     }
 
-    public synchronized void markCompleted(String resultFilename, byte[] resultContent) {
+    public synchronized void markCompleted(
+            String resultFilename,
+            String resultFilePath,
+            String adminResultFilename,
+            String adminResultFilePath,
+            Instant completedAt
+    ) {
         this.resultFilename = resultFilename;
-        this.resultContent = resultContent;
+        this.resultFilePath = resultFilePath;
+        this.adminResultFilename = adminResultFilename;
+        this.adminResultFilePath = adminResultFilePath;
+        this.resultContent = null;
+        this.completedAt = completedAt;
+        this.resultExpiresAt = completedAt.plus(Duration.ofDays(7));
         this.processedCount = totalCount;
         this.progress = 100;
         this.stage = "완료";
         this.status = ProductExcelJobStatus.COMPLETED;
         this.message = "결과 엑셀을 다운로드할 수 있습니다.";
+    }
+
+    public boolean isResultExpired(Instant now) {
+        return resultDeletedAt != null || (resultExpiresAt != null && !now.isBefore(resultExpiresAt));
     }
 
     public synchronized void recordCategoryElapsed(long elapsedMillis) {
@@ -105,6 +151,11 @@ public class ProductExcelJob {
     }
 
     public synchronized void markFailed(String message) {
+        this.resultFilePath = null;
+        this.adminResultFilePath = null;
+        this.resultContent = null;
+        this.completedAt = null;
+        this.resultExpiresAt = null;
         this.status = ProductExcelJobStatus.FAILED;
         this.stage = "실패";
         this.message = message;
