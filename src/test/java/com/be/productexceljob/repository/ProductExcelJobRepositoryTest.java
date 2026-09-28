@@ -8,6 +8,7 @@ import com.be.productexceljob.service.ProductExcelJobProgressUpdater;
 import jakarta.persistence.EntityManager;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,13 +39,14 @@ class ProductExcelJobRepositoryTest {
         assertThat(progress.getUploadedFilePath()).isEqualTo(Path.of("uploads", "input.xlsx"));
         entityManager.clear();
 
-        job.markCompleted("result.xlsx", new byte[]{1, 2, 3});
+        job.markCompleted("result.xlsx", jobId + "/result.xlsx", Instant.now());
         repository.saveAndFlush(job);
         entityManager.clear();
 
         ProductExcelJob completed = repository.findByJobIdAndUserId(jobId, 1L).orElseThrow();
         assertThat(completed.getStatus()).isEqualTo(ProductExcelJobStatus.COMPLETED);
-        assertThat(completed.getResultContent()).containsExactly(1, 2, 3);
+        assertThat(completed.getResultContent()).isNull();
+        assertThat(completed.getResultFilePath()).isEqualTo(jobId + "/result.xlsx");
         assertThat(repository.findByJobIdAndUserId(jobId, 2L)).isEmpty();
         assertThat(repository.saveAndFlush(newJob()).getJobId()).isNotEqualTo(jobId);
     }

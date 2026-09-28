@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class ProductExcelJobTest {
@@ -30,7 +31,7 @@ class ProductExcelJobTest {
         assertEquals(1_250L, job.getCategoryElapsedMillis());
         assertEquals(340L, job.getKeywordElapsedMillis());
 
-        job.markCompleted("result.xlsx", new byte[]{1});
+        job.markCompleted("result.xlsx", "1/result.xlsx", Instant.now());
 
         assertEquals(ProductExcelJobStatus.COMPLETED, job.getStatus());
         assertEquals(100, job.getProgress());

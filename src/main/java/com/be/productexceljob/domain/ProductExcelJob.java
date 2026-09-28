@@ -2,6 +2,7 @@ package com.be.productexceljob.domain;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
 import lombok.Getter;
 import lombok.AccessLevel;
@@ -43,6 +44,12 @@ public class ProductExcelJob {
     private volatile Long categoryElapsedMillis;
     private volatile Long keywordElapsedMillis;
     private volatile String resultFilename;
+    @Column(length = 2048)
+    private String resultFilePath;
+    private Instant completedAt;
+    private Instant resultExpiresAt;
+    private Instant resultDeletedAt;
+    // 이전 버전에서 DB에 저장한 결과의 다운로드와 만료 처리를 위한 호환 필드.
     @Lob
     @Column(columnDefinition = "longblob")
     private volatile byte[] resultContent;
@@ -107,14 +114,21 @@ public class ProductExcelJob {
         }
     }
 
-    public synchronized void markCompleted(String resultFilename, byte[] resultContent) {
+    public synchronized void markCompleted(String resultFilename, String resultFilePath, Instant completedAt) {
         this.resultFilename = resultFilename;
-        this.resultContent = resultContent;
+        this.resultFilePath = resultFilePath;
+        this.resultContent = null;
+        this.completedAt = completedAt;
+        this.resultExpiresAt = completedAt.plus(Duration.ofHours(24));
         this.processedCount = totalCount;
         this.progress = 100;
         this.stage = "완료";
         this.status = ProductExcelJobStatus.COMPLETED;
         this.message = "결과 엑셀을 다운로드할 수 있습니다.";
+    }
+
+    public boolean isResultExpired(Instant now) {
+        return resultDeletedAt != null || (resultExpiresAt != null && !now.isBefore(resultExpiresAt));
     }
 
     public synchronized void recordCategoryElapsed(long elapsedMillis) {
@@ -126,6 +140,10 @@ public class ProductExcelJob {
     }
 
     public synchronized void markFailed(String message) {
+        this.resultFilePath = null;
+        this.resultContent = null;
+        this.completedAt = null;
+        this.resultExpiresAt = null;
         this.status = ProductExcelJobStatus.FAILED;
         this.stage = "실패";
         this.message = message;

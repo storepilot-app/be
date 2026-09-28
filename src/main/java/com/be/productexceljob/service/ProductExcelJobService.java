@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.concurrent.Executor;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class ProductExcelJobService {
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
     private final PlatformTransactionManager transactionManager;
+    private final ProductExcelResultStorage resultStorage;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
@@ -86,14 +88,29 @@ public class ProductExcelJobService {
     public ExcelDownloadResult getExcelDownloadResult(long jobId, Long userId) {
         ProductExcelJob job = findExcelJob(jobId, userId);
         if (job.getStatus() != ProductExcelJobStatus.COMPLETED
-                || job.getResultFilename() == null
-                || job.getResultContent() == null) {
+                || job.getResultFilename() == null) {
             throw new BusinessException(ErrorCode.JOB_NOT_COMPLETED, "아직 다운로드할 수 있는 결과가 없습니다.");
         }
-        return new ExcelDownloadResult(job.getResultFilename(), job.getResultContent());
+        if (job.isResultExpired(Instant.now())) {
+            throw new BusinessException(ErrorCode.JOB_RESULT_EXPIRED,
+                    "결과 파일의 보관 기간이 만료되었습니다. 다시 작업해 주세요.");
+        }
+        try {
+            if (job.getResultFilePath() != null) {
+                return new ExcelDownloadResult(job.getResultFilename(), resultStorage.read(job.getResultFilePath()));
+            }
+            if (job.getResultContent() != null) {
+                return new ExcelDownloadResult(job.getResultFilename(), job.getResultContent());
+            }
+        } catch (IOException error) {
+            log.warn("결과 엑셀 읽기 실패: jobId={}", jobId, error);
+        }
+        throw new BusinessException(ErrorCode.JOB_RESULT_UNAVAILABLE,
+                "결과 파일을 읽을 수 없습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.");
     }
 
     private void processExcelJob(ProductExcelJob job) {
+        String savedResultPath = null;
         try {
             job.markProcessing();
             productExcelJobRepository.save(job);
@@ -110,16 +127,25 @@ public class ProductExcelJobService {
                     ),
                     progressUpdater
             );
+            savedResultPath = resultStorage.save(job.getJobId(), result.content());
+            String resultPath = savedResultPath;
             new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
                 userUsageService.completeCategoryKeywordJob(
                         job.getUserId(),
                         job.getUsageDate(),
                         job.getProductCount()
                 );
-                job.markCompleted(result.filename(), result.content());
+                job.markCompleted(result.filename(), resultPath, Instant.now());
                 productExcelJobRepository.save(job);
             });
         } catch (Exception error) {
+            if (savedResultPath != null) {
+                try {
+                    resultStorage.delete(savedResultPath);
+                } catch (IOException cleanupError) {
+                    log.warn("실패한 작업 결과 파일 삭제 실패: jobId={}", job.getJobId(), cleanupError);
+                }
+            }
             releaseReservedProducts(job.getUserId(), job.getUsageDate(), job.getProductCount(), null);
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
