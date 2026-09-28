@@ -60,8 +60,8 @@ public class ProductExcelResultStorage {
     }
 
     void cleanupExpiredResults(Instant now) {
-        // 기존 DB 결과는 완료 시각이 없으므로 최초 정리 실행부터 24시간을 보장한다.
-        repository.initializeLegacyResultExpiry(now.plus(Duration.ofHours(24)));
+        // 기존 DB 결과는 완료 시각이 없으므로 최초 정리 실행부터 7일을 보장한다.
+        repository.initializeLegacyResultExpiry(now.plus(Duration.ofDays(7)));
         for (Long jobId : repository.findExpiredResultIds(now)) {
             try {
                 var job = repository.findById(jobId).orElse(null);

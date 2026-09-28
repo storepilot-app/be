@@ -119,7 +119,7 @@ public class ProductExcelJob {
         this.resultFilePath = resultFilePath;
         this.resultContent = null;
         this.completedAt = completedAt;
-        this.resultExpiresAt = completedAt.plus(Duration.ofHours(24));
+        this.resultExpiresAt = completedAt.plus(Duration.ofDays(7));
         this.processedCount = totalCount;
         this.progress = 100;
         this.stage = "완료";

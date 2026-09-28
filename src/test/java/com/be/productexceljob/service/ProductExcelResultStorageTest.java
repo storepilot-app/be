@@ -35,14 +35,14 @@ class ProductExcelResultStorageTest {
     }
 
     @Test
-    void expiresAtCompletionPlus24HoursAndKeepsHistory() throws Exception {
+    void expiresAtCompletionPlusSevenDaysAndKeepsHistory() throws Exception {
         Instant completedAt = Instant.parse("2026-09-28T00:00:00Z");
         ProductExcelJob job = repository.saveAndFlush(newJob());
         String path = storage.save(job.getJobId(), new byte[]{1, 2, 3});
         job.markCompleted("result.xlsx", path, completedAt);
         repository.saveAndFlush(job);
         entityManager.clear();
-        Instant expiry = completedAt.plus(Duration.ofHours(24));
+        Instant expiry = completedAt.plus(Duration.ofDays(7));
 
         storage.cleanupExpiredResults(expiry.minusSeconds(1));
         assertThat(storage.read(path)).containsExactly(1, 2, 3);
@@ -66,7 +66,7 @@ class ProductExcelResultStorageTest {
         processing.markProcessing();
         repository.saveAndFlush(processing);
         ProductExcelJob completed = repository.saveAndFlush(newJob());
-        completed.markCompleted("result.xlsx", completed.getJobId() + "/result.xlsx", now.minus(Duration.ofDays(2)));
+        completed.markCompleted("result.xlsx", completed.getJobId() + "/result.xlsx", now.minus(Duration.ofDays(8)));
         repository.saveAndFlush(completed);
         entityManager.clear();
 
@@ -78,7 +78,7 @@ class ProductExcelResultStorageTest {
     }
 
     @Test
-    void grantsLegacyResults24HoursThenClearsBlob() {
+    void grantsLegacyResultsSevenDaysThenClearsBlob() {
         ProductExcelJob legacy = newJob();
         ReflectionTestUtils.setField(legacy, "status", ProductExcelJobStatus.COMPLETED);
         ReflectionTestUtils.setField(legacy, "resultContent", new byte[]{1});
@@ -88,10 +88,10 @@ class ProductExcelResultStorageTest {
         storage.cleanupExpiredResults(now);
         entityManager.clear();
         ProductExcelJob retained = repository.findById(legacy.getJobId()).orElseThrow();
-        assertThat(retained.getResultExpiresAt()).isEqualTo(now.plus(Duration.ofHours(24)));
+        assertThat(retained.getResultExpiresAt()).isEqualTo(now.plus(Duration.ofDays(7)));
         assertThat(retained.getResultContent()).containsExactly(1);
         entityManager.clear();
-        storage.cleanupExpiredResults(now.plus(Duration.ofHours(24)));
+        storage.cleanupExpiredResults(now.plus(Duration.ofDays(7)));
         entityManager.clear();
         assertThat(repository.findById(legacy.getJobId()).orElseThrow().getResultContent()).isNull();
     }
@@ -101,7 +101,7 @@ class ProductExcelResultStorageTest {
         Instant now = Instant.now();
         ProductExcelJob job = repository.saveAndFlush(newJob());
         String path = job.getJobId() + "/result.xlsx";
-        job.markCompleted("result.xlsx", path, now.minus(Duration.ofDays(2)));
+        job.markCompleted("result.xlsx", path, now.minus(Duration.ofDays(8)));
         repository.saveAndFlush(job);
         entityManager.clear();
         Path obstructed = directory.resolve("product-excel-results").resolve(path);
