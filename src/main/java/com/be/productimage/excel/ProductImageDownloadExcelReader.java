@@ -6,6 +6,8 @@ import static com.be.productimage.excel.ProductImageDownloadLayout.PRODUCT_NUMBE
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.productimage.dto.ProductImageDownloadFailure;
 import com.be.productimage.dto.ProductImageDownloadItem;
 import com.be.productimage.dto.ProductImageDownloadPrepareResponse;
@@ -18,7 +20,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -63,10 +64,15 @@ public class ProductImageDownloadExcelReader {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "엑셀 헤더 행이 비어 있습니다.");
         }
 
+        ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
+        int imageUrlColumnIndex = headers.findFirst(IMAGE_URL_COLUMN);
+        if (imageUrlColumnIndex < 0) {
+            throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + IMAGE_URL_COLUMN);
+        }
         return new ProductImageDownloadSheetContext(
-                findRequiredColumnIndex(headerRow, IMAGE_URL_COLUMN),
-                findOptionalColumnIndex(headerRow, PRODUCT_CODE_COLUMN),
-                findOptionalColumnIndex(headerRow, PRODUCT_NUMBER_COLUMN)
+                imageUrlColumnIndex,
+                headers.findFirst(PRODUCT_CODE_COLUMN),
+                headers.findFirst(PRODUCT_NUMBER_COLUMN)
         );
     }
 
@@ -113,27 +119,8 @@ public class ProductImageDownloadExcelReader {
         return new ProductImageDownloadRows(images, failures);
     }
 
-    private int findRequiredColumnIndex(Row headerRow, String columnName) {
-        int index = findOptionalColumnIndex(headerRow, columnName);
-        if (index < 0) {
-            throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + columnName);
-        }
-        return index;
-    }
-
-    private int findOptionalColumnIndex(Row headerRow, String columnName) {
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        for (Cell cell : headerRow) {
-            if (formatter.formatCellValue(cell).trim().equals(columnName)) {
-                return cell.getColumnIndex();
-            }
-        }
-        return -1;
-    }
-
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
-        Cell cell = row.getCell(columnIndex);
-        return cell == null ? "" : formatter.formatCellValue(cell).trim();
+        return ExcelCellReader.readTrimmed(row, columnIndex, formatter);
     }
 
     private String uniqueEntryName(Set<String> entryNames, String filenameBase, String extension) {

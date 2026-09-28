@@ -2,6 +2,8 @@ package com.be.navercategory.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.navercategory.domain.NaverCategory;
 import com.be.navercategory.domain.NaverCategoryVersion;
 import com.be.navercategory.repository.NaverCategoryRepository;
@@ -19,7 +21,6 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -166,11 +167,19 @@ public class NaverCategoryUploadService {
     }
 
     private Map<String, Integer> resolveHeaderIndexes(Row headerRow) {
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
+        ExcelHeaderLookup headerLookup = ExcelHeaderLookup.from(headerRow);
         Map<String, Integer> indexes = new LinkedHashMap<>();
-        for (Cell cell : headerRow) {
-            String header = formatter.formatCellValue(cell).trim();
-            indexes.put(header, cell.getColumnIndex());
+        for (String header : List.of(
+                HEADER_CATEGORY_CODE,
+                HEADER_LEVEL1,
+                HEADER_LEVEL2,
+                HEADER_LEVEL3,
+                HEADER_LEVEL4
+        )) {
+            List<Integer> matches = headerLookup.findAll(header);
+            if (!matches.isEmpty()) {
+                indexes.put(header, matches.getLast());
+            }
         }
 
         requireHeader(indexes, HEADER_CATEGORY_CODE);
@@ -188,11 +197,7 @@ public class NaverCategoryUploadService {
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
-        Cell cell = row.getCell(columnIndex);
-        if (cell == null) {
-            return "";
-        }
-        return formatter.formatCellValue(cell).trim();
+        return ExcelCellReader.readTrimmed(row, columnIndex, formatter);
     }
 
     private void writeCsv(Path csvFilePath, List<NaverCategory> categories) throws IOException {

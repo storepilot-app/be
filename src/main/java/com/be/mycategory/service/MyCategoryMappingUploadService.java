@@ -2,6 +2,8 @@ package com.be.mycategory.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.domain.MyCategoryMappingVersion;
 import com.be.mycategory.repository.MyCategoryMappingRepository;
@@ -19,7 +21,6 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -115,7 +116,7 @@ public class MyCategoryMappingUploadService {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
-            HeaderColumns headerColumns = resolveHeaderColumns(sheet.getRow(0), formatter);
+            HeaderColumns headerColumns = resolveHeaderColumns(sheet.getRow(0));
             Map<String, MyCategoryMapping> mappingsByMyCategory = new LinkedHashMap<>();
             int sourceRowCount = 0;
             int invalidRowCount = 0;
@@ -188,40 +189,28 @@ public class MyCategoryMappingUploadService {
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
-        Cell cell = row.getCell(columnIndex);
-        if (cell == null) {
-            return "";
-        }
-        return formatter.formatCellValue(cell).trim();
+        return ExcelCellReader.readTrimmed(row, columnIndex, formatter);
     }
 
-    private HeaderColumns resolveHeaderColumns(Row headerRow, DataFormatter formatter) {
+    private HeaderColumns resolveHeaderColumns(Row headerRow) {
         if (headerRow == null) {
             throw invalidHeader("첫 번째 행에 열 제목이 없습니다.");
         }
 
-        Integer myCategoryColumnIndex = null;
-        Integer naverCategoryColumnIndex = null;
-        for (int columnIndex = 0; columnIndex < headerRow.getLastCellNum(); columnIndex++) {
-            String header = readCell(headerRow, columnIndex, formatter);
-            if (MY_CATEGORY_HEADER.equals(header)) {
-                if (myCategoryColumnIndex != null) {
-                    throw invalidHeader("'" + MY_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
-                }
-                myCategoryColumnIndex = columnIndex;
-            }
-            if (NAVER_CATEGORY_HEADER.equals(header)) {
-                if (naverCategoryColumnIndex != null) {
-                    throw invalidHeader("'" + NAVER_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
-                }
-                naverCategoryColumnIndex = columnIndex;
-            }
+        ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
+        List<Integer> myCategoryIndexes = headers.findAll(MY_CATEGORY_HEADER);
+        List<Integer> naverCategoryIndexes = headers.findAll(NAVER_CATEGORY_HEADER);
+        if (myCategoryIndexes.size() > 1) {
+            throw invalidHeader("'" + MY_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
+        }
+        if (naverCategoryIndexes.size() > 1) {
+            throw invalidHeader("'" + NAVER_CATEGORY_HEADER + "' 열이 두 개 이상 있습니다.");
         }
 
-        if (myCategoryColumnIndex == null || naverCategoryColumnIndex == null) {
+        if (myCategoryIndexes.isEmpty() || naverCategoryIndexes.isEmpty()) {
             throw invalidHeader("첫 번째 행에 '마이카테'와 '네이버카테' 열이 모두 있어야 합니다.");
         }
-        return new HeaderColumns(myCategoryColumnIndex, naverCategoryColumnIndex);
+        return new HeaderColumns(myCategoryIndexes.getFirst(), naverCategoryIndexes.getFirst());
     }
 
     private void validateNaverCategoryCode(
