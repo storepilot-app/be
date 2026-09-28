@@ -2,6 +2,8 @@ package com.be.trainingproductrequest.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.trainingproductrequest.domain.TrainingProductRequest;
@@ -199,16 +201,17 @@ public class TrainingProductRequestService {
             }
 
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
-            int productNameColumn = findRequiredColumn(headerRow, PRODUCT_NAME_HEADERS, "상품명", formatter);
-            int myCategoryColumn = findRequiredColumn(headerRow, MY_CATEGORY_HEADERS, "마이카테", formatter);
+            ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
+            int productNameColumn = findRequiredColumn(headers, PRODUCT_NAME_HEADERS, "상품명");
+            int myCategoryColumn = findRequiredColumn(headers, MY_CATEGORY_HEADERS, "마이카테");
             int productCount = 0;
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
                 }
-                String productName = formatter.formatCellValue(row.getCell(productNameColumn)).trim();
-                String myCategory = formatter.formatCellValue(row.getCell(myCategoryColumn)).trim();
+                String productName = ExcelCellReader.readTrimmed(row, productNameColumn, formatter);
+                String myCategory = ExcelCellReader.readTrimmed(row, myCategoryColumn, formatter);
                 if (!productName.isBlank() && !myCategory.isBlank()) {
                     productCount++;
                     if (productCount > MAX_PRODUCT_COUNT) {
@@ -228,22 +231,15 @@ public class TrainingProductRequestService {
     }
 
     private int findRequiredColumn(
-            Row headerRow,
+            ExcelHeaderLookup headers,
             List<String> acceptedHeaders,
-            String displayName,
-            DataFormatter formatter
+            String displayName
     ) {
-        for (var cell : headerRow) {
-            String value = normalizeHeader(formatter.formatCellValue(cell));
-            if (acceptedHeaders.stream().map(this::normalizeHeader).anyMatch(value::equals)) {
-                return cell.getColumnIndex();
-            }
+        int index = headers.findFirstNormalized(acceptedHeaders);
+        if (index < 0) {
+            throw invalid("1행에서 '" + displayName + "' 열을 찾을 수 없습니다.");
         }
-        throw invalid("1행에서 '" + displayName + "' 열을 찾을 수 없습니다.");
-    }
-
-    private String normalizeHeader(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        return index;
     }
 
     private String safeOriginalFilename(String filename) {

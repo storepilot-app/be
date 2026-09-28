@@ -83,11 +83,13 @@ class ProductExcelSheetProcessorTest {
                     "카테고리",
                     false
             );
+            header.getCell(5).setCellValue("변경된 이미지 헤더");
             List<ProductExcelSheetProcessor.ProductExcelRow> rows = processor.readProductRows(context);
 
             assertEquals(KEYWORD_HEADER, header.getCell(context.keywordColumnIndex()).getStringCellValue());
             assertEquals(MY_CATEGORY_HEADER, header.getCell(context.myCategoryColumnIndex()).getStringCellValue());
             assertEquals(NAVER_CATEGORY_HEADER, header.getCell(context.naverCategoryColumnIndex()).getStringCellValue());
+            assertEquals(5, context.imageUrlColumnIndex());
             assertEquals(1, rows.size());
             assertEquals(1, rows.getFirst().rowId());
             assertEquals("무선 마우스", rows.getFirst().productName());
@@ -105,6 +107,21 @@ class ProductExcelSheetProcessorTest {
                     BusinessException.class,
                     () -> processor.prepareSheet(workbook, "상품명", "카테고리", false)
             );
+        }
+    }
+
+    @Test
+    void readsRowsWhenOptionalHeadersAreMissing() throws Exception {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("상품");
+            sheet.createRow(0).createCell(0).setCellValue("상품명");
+            sheet.createRow(1).createCell(0).setCellValue("테스트 상품");
+
+            var context = processor.prepareSheet(workbook, "상품명", "", false);
+            var row = processor.readProductRows(context).getFirst();
+
+            assertEquals("", row.category());
+            org.junit.jupiter.api.Assertions.assertNull(row.imageUrl());
         }
     }
 }

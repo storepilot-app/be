@@ -8,6 +8,8 @@ import com.be.categorymatcher.dto.MyCategoryMatchResult;
 import com.be.categorymatcher.dto.MyCategoryMatchStatus;
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.keyword.KeywordDetailEntry;
 import com.be.productexceljob.excel.KeywordDetailSheetWriter;
 import com.be.productexceljob.service.ProductKeywordGenerator.GeneratedKeyword;
@@ -33,6 +35,9 @@ public class ProductExcelSheetProcessor {
     private static final String NO_CATEGORY_MATCH = "매칭없음";
     private static final String NO_MY_CATEGORY_MAPPING = "마이카테 없음";
     private static final String NO_SELECTED_CATEGORY = "없음";
+    private static final String IMAGE_URL_HEADER = "목록이미지1";
+    private static final int HEADER_ROW_INDEX = 0;
+    private static final int FIRST_DATA_ROW_INDEX = 1;
 
     private final KeywordDetailSheetWriter keywordDetailSheetWriter;
 
@@ -47,18 +52,20 @@ public class ProductExcelSheetProcessor {
         }
 
         Sheet sheet = workbook.getSheetAt(0);
-        Row headerRow = sheet.getRow(0);
+        Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
         if (headerRow == null) {
             throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "엑셀 헤더 행이 비어 있습니다.");
         }
 
+        ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
         CellStyle selectedStyle = createFillStyle(workbook, IndexedColors.LIGHT_GREEN);
         CellStyle rejectedStyle = createFillStyle(workbook, IndexedColors.ROSE);
-        int productNameColumnIndex = findRequiredColumnIndex(headerRow, productNameColumn);
-        int categoryColumnIndex = findOptionalColumnIndex(headerRow, categoryColumn);
-        int keywordColumnIndex = findOrAppendColumn(sheet, KEYWORD_HEADER);
-        int myCategoryColumnIndex = findOrAppendColumn(sheet, MY_CATEGORY_HEADER);
-        int naverCategoryColumnIndex = findOrAppendColumn(sheet, NAVER_CATEGORY_HEADER);
+        int productNameColumnIndex = findRequiredColumn(headers, productNameColumn);
+        int categoryColumnIndex = headers.findFirst(categoryColumn);
+        int imageUrlColumnIndex = headers.findFirst(IMAGE_URL_HEADER);
+        int keywordColumnIndex = findOrAppendColumn(sheet, headers, KEYWORD_HEADER);
+        int myCategoryColumnIndex = findOrAppendColumn(sheet, headers, MY_CATEGORY_HEADER);
+        int naverCategoryColumnIndex = findOrAppendColumn(sheet, headers, NAVER_CATEGORY_HEADER);
         int detailOffset = nextEmptyColumn(sheet) - TOP_NAVER_PRODUCT_NAME_COLUMN_INDEX;
         if (includeSelectionDetails) {
             ensureTopNaverCategoryHeaders(headerRow, detailOffset);
@@ -69,6 +76,7 @@ public class ProductExcelSheetProcessor {
                 sheet,
                 productNameColumnIndex,
                 categoryColumnIndex,
+                imageUrlColumnIndex,
                 keywordColumnIndex,
                 myCategoryColumnIndex,
                 naverCategoryColumnIndex,
@@ -82,25 +90,34 @@ public class ProductExcelSheetProcessor {
         List<ProductExcelRow> productRows = new ArrayList<>();
         DataFormatter formatter = new DataFormatter(Locale.KOREA);
         Sheet sheet = sheetContext.sheet();
-        int imageColumn = findOptionalColumnIndex(sheet.getRow(0), "목록이미지1");
-        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        for (int rowIndex = FIRST_DATA_ROW_INDEX; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) {
                 continue;
             }
 
-            String productName = readCell(row, sheetContext.productNameColumnIndex(), formatter);
-            String category = sheetContext.categoryColumnIndex() < 0
-                    ? ""
-                    : readCell(row, sheetContext.categoryColumnIndex(), formatter);
-            if (productName.isBlank()) {
-                continue;
+            ProductExcelRow productRow = readProductRow(rowIndex, row, sheetContext, formatter);
+            if (productRow != null) {
+                productRows.add(productRow);
             }
-
-            String imageUrl = imageColumn < 0 ? null : readCell(row, imageColumn, formatter).trim();
-            productRows.add(new ProductExcelRow(rowIndex, row, productName, category, imageUrl));
         }
         return productRows;
+    }
+
+    private ProductExcelRow readProductRow(
+            int rowIndex,
+            Row row,
+            ProductExcelSheetContext sheetContext,
+            DataFormatter formatter
+    ) {
+        String productName = readCell(row, sheetContext.productNameColumnIndex(), formatter);
+        if (productName.isBlank()) {
+            return null;
+        }
+
+        String category = readOptionalCell(row, sheetContext.categoryColumnIndex(), formatter, "");
+        String imageUrl = readOptionalCell(row, sheetContext.imageUrlColumnIndex(), formatter, null);
+        return new ProductExcelRow(rowIndex, row, productName, category, imageUrl);
     }
 
     List<KeywordDetailEntry> writeProductResultRows(
@@ -199,29 +216,6 @@ public class ProductExcelSheetProcessor {
         keywordDetailSheetWriter.write(workbook, keywordDetails);
     }
 
-    private int findRequiredColumnIndex(Row headerRow, String columnName) {
-        int index = findOptionalColumnIndex(headerRow, columnName);
-        if (index < 0) {
-            throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + columnName);
-        }
-        return index;
-    }
-
-    private int findOptionalColumnIndex(Row headerRow, String columnName) {
-        if (columnName == null || columnName.isBlank()) {
-            return -1;
-        }
-
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        for (Cell cell : headerRow) {
-            String value = formatter.formatCellValue(cell).trim();
-            if (value.equals(columnName)) {
-                return cell.getColumnIndex();
-            }
-        }
-        return -1;
-    }
-
     private void ensureHeader(Row headerRow, int columnIndex, String value) {
         Cell cell = headerRow.getCell(columnIndex);
         if (cell == null) {
@@ -236,19 +230,22 @@ public class ProductExcelSheetProcessor {
         return column;
     }
 
-    private int findOrAppendColumn(Sheet sheet, String name) {
-        Row header = sheet.getRow(0);
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        int found = -1;
-        for (Cell cell : header) {
-            if (formatter.formatCellValue(cell).replaceAll("\\s+", "").equals(name)) {
-                if (found >= 0) throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "중복된 열 이름입니다: " + name);
-                found = cell.getColumnIndex();
-            }
+    private int findRequiredColumn(ExcelHeaderLookup headers, String name) {
+        int index = headers.findFirst(name);
+        if (index < 0) {
+            throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + name);
         }
-        if (found >= 0) return found;
+        return index;
+    }
+
+    private int findOrAppendColumn(Sheet sheet, ExcelHeaderLookup headers, String name) {
+        List<Integer> indexes = headers.findAllIgnoringWhitespace(name);
+        if (indexes.size() > 1) {
+            throw new BusinessException(ErrorCode.INVALID_EXCEL_FILE, "중복된 열 이름입니다: " + name);
+        }
+        if (!indexes.isEmpty()) return indexes.getFirst();
         int column = nextEmptyColumn(sheet);
-        ensureHeader(header, column, name);
+        ensureHeader(sheet.getRow(HEADER_ROW_INDEX), column, name);
         return column;
     }
 
@@ -292,11 +289,16 @@ public class ProductExcelSheetProcessor {
     }
 
     private String readCell(Row row, int columnIndex, DataFormatter formatter) {
-        Cell cell = row.getCell(columnIndex);
-        if (cell == null) {
-            return "";
-        }
-        return formatter.formatCellValue(cell).trim();
+        return ExcelCellReader.readTrimmed(row, columnIndex, formatter);
+    }
+
+    private String readOptionalCell(
+            Row row,
+            int columnIndex,
+            DataFormatter formatter,
+            String missingValue
+    ) {
+        return columnIndex < 0 ? missingValue : readCell(row, columnIndex, formatter);
     }
 
     private String resolveMyCategory(MyCategoryMatchResult result) {
@@ -443,6 +445,7 @@ public class ProductExcelSheetProcessor {
             Sheet sheet,
             int productNameColumnIndex,
             int categoryColumnIndex,
+            int imageUrlColumnIndex,
             int keywordColumnIndex,
             int myCategoryColumnIndex,
             int naverCategoryColumnIndex,

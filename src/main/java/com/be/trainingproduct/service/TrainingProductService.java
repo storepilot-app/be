@@ -2,6 +2,8 @@ package com.be.trainingproduct.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.mycategory.service.MyCategoryMappingUploadService;
@@ -64,13 +66,13 @@ public class TrainingProductService {
                 throw invalid("상품 엑셀에 시트가 없습니다.");
             }
             Sheet sheet = workbook.getSheetAt(0);
-            TrainingProductColumns columns = resolveColumns(sheet, formatter);
+            TrainingProductColumns columns = resolveColumns(sheet);
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
-                String name = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
+                String name = ExcelCellReader.readTrimmed(row, columns.productNameColumnIndex(), formatter);
                 if (name.isBlank()) continue;
-                String code = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
+                String code = ExcelCellReader.readTrimmed(row, columns.myCategoryColumnIndex(), formatter);
                 MyCategoryMapping mapping = mappings.get(code);
                 String reason = code.isBlank() ? "마이카테 코드가 없습니다."
                         : mapping == null ? "매핑 파일에 해당 마이카테 코드가 없습니다."
@@ -214,20 +216,20 @@ public class TrainingProductService {
         for (MultipartFile file : files) {
             try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
                 Sheet sheet = workbook.getSheetAt(0);
-                TrainingProductColumns columns = resolveColumns(sheet, formatter);
+                TrainingProductColumns columns = resolveColumns(sheet);
                 for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                     Row row = sheet.getRow(rowIndex);
                     if (row == null) {
                         continue;
                     }
 
-                    String productName = formatter.formatCellValue(row.getCell(columns.productNameColumnIndex())).trim();
+                    String productName = ExcelCellReader.readTrimmed(row, columns.productNameColumnIndex(), formatter);
                     if (productName.isBlank()) {
                         continue;
                     }
                     sourceRowCount++;
 
-                    String myCategoryCode = formatter.formatCellValue(row.getCell(columns.myCategoryColumnIndex())).trim();
+                    String myCategoryCode = ExcelCellReader.readTrimmed(row, columns.myCategoryColumnIndex(), formatter);
                     MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
                     if (mapping == null) {
                         unmappedRowCount++;
@@ -245,35 +247,29 @@ public class TrainingProductService {
     }
 
 
-    private TrainingProductColumns resolveColumns(Sheet sheet, DataFormatter formatter) {
+    private TrainingProductColumns resolveColumns(Sheet sheet) {
         Row headerRow = sheet.getRow(0);
         if (headerRow == null) {
             throw invalid("기존 상품 엑셀 파일의 헤더 행이 비어 있습니다.");
         }
 
+        ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
         return new TrainingProductColumns(
-                findRequiredColumnIndex(headerRow, PRODUCT_NAME_HEADERS, "상품명", formatter),
-                findRequiredColumnIndex(headerRow, MY_CATEGORY_HEADERS, "마이카테고리", formatter)
+                findRequiredColumnIndex(headers, PRODUCT_NAME_HEADERS, "상품명"),
+                findRequiredColumnIndex(headers, MY_CATEGORY_HEADERS, "마이카테고리")
         );
     }
 
     private int findRequiredColumnIndex(
-            Row headerRow,
-            List<String> headers,
-            String displayName,
-            DataFormatter formatter
+            ExcelHeaderLookup headerLookup,
+            List<String> acceptedHeaders,
+            String displayName
     ) {
-        for (org.apache.poi.ss.usermodel.Cell cell : headerRow) {
-            String value = normalizeHeader(formatter.formatCellValue(cell));
-            if (headers.stream().map(this::normalizeHeader).anyMatch(value::equals)) {
-                return cell.getColumnIndex();
-            }
+        int index = headerLookup.findFirstNormalized(acceptedHeaders);
+        if (index < 0) {
+            throw invalid("기존 상품 엑셀 파일에 필요한 헤더가 없습니다: " + displayName);
         }
-        throw invalid("기존 상품 엑셀 파일에 필요한 헤더가 없습니다: " + displayName);
-    }
-
-    private String normalizeHeader(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        return index;
     }
 
     private void validateFiles(List<MultipartFile> files) {

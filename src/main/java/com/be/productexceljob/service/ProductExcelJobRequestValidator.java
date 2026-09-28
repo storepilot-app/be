@@ -2,6 +2,8 @@ package com.be.productexceljob.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
+import com.be.global.excel.ExcelCellReader;
+import com.be.global.excel.ExcelHeaderLookup;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -75,13 +77,14 @@ public class ProductExcelJobRequestValidator {
             }
 
             DataFormatter formatter = new DataFormatter(Locale.KOREA);
-            int productNameColumnIndex = findProductNameColumnIndex(headerRow, productNameColumn, formatter);
+            int productNameColumnIndex = ExcelHeaderLookup.from(headerRow).findFirst(productNameColumn);
+            if (productNameColumnIndex < 0) {
+                throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + productNameColumn);
+            }
             int productCount = 0;
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                if (row != null
-                        && row.getCell(productNameColumnIndex) != null
-                        && !formatter.formatCellValue(row.getCell(productNameColumnIndex)).trim().isBlank()) {
+                if (!ExcelCellReader.readTrimmed(row, productNameColumnIndex, formatter).isBlank()) {
                     productCount++;
                     if (productCount > MAX_PRODUCTS_PER_JOB) {
                         throw new BusinessException(
@@ -99,12 +102,4 @@ public class ProductExcelJobRequestValidator {
         }
     }
 
-    private int findProductNameColumnIndex(Row headerRow, String productNameColumn, DataFormatter formatter) {
-        for (var cell : headerRow) {
-            if (formatter.formatCellValue(cell).trim().equals(productNameColumn)) {
-                return cell.getColumnIndex();
-            }
-        }
-        throw new BusinessException(ErrorCode.COLUMN_NOT_FOUND, "Column not found: " + productNameColumn);
-    }
 }
