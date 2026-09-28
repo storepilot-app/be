@@ -4,30 +4,50 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Getter;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
 
 @Getter
+@Entity
+@Table(name = "product_excel_jobs")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProductExcelJob {
-    private final long jobId;
-    private final Long userId;
-    private final String originalFilename;
-    private final Path uploadedFilePath;
-    private final boolean includeSelectionDetails;
-    private final int productCount;
-    private final LocalDate usageDate;
-    private final Instant createdAt;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long jobId;
+    private Long userId;
+    private String originalFilename;
+    @Column(length = 2048)
+    private String uploadedFilePath;
+    private boolean includeSelectionDetails;
+    private int productCount;
+    private LocalDate usageDate;
+    private Instant createdAt;
+    @Enumerated(EnumType.STRING)
     private volatile ProductExcelJobStatus status;
     private volatile int totalCount;
     private volatile int processedCount;
     private volatile int progress;
     private volatile String stage;
+    @Column(columnDefinition = "text")
     private volatile String message;
     private volatile Long categoryElapsedMillis;
     private volatile Long keywordElapsedMillis;
     private volatile String resultFilename;
+    @Lob
+    @Column(columnDefinition = "longblob")
     private volatile byte[] resultContent;
 
     private ProductExcelJob(
-            long jobId,
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
@@ -35,10 +55,9 @@ public class ProductExcelJob {
             int productCount,
             LocalDate usageDate
     ) {
-        this.jobId = jobId;
         this.userId = userId;
         this.originalFilename = originalFilename;
-        this.uploadedFilePath = uploadedFilePath;
+        this.uploadedFilePath = uploadedFilePath.toString();
         this.includeSelectionDetails = includeSelectionDetails;
         this.productCount = productCount;
         this.usageDate = usageDate;
@@ -50,7 +69,6 @@ public class ProductExcelJob {
     }
 
     public static ProductExcelJob register(
-            long jobId,
             Long userId,
             String originalFilename,
             Path uploadedFilePath,
@@ -59,7 +77,6 @@ public class ProductExcelJob {
             LocalDate usageDate
     ) {
         return new ProductExcelJob(
-                jobId,
                 userId,
                 originalFilename,
                 uploadedFilePath,
@@ -67,6 +84,10 @@ public class ProductExcelJob {
                 productCount,
                 usageDate
         );
+    }
+
+    public Path getUploadedFilePath() {
+        return Path.of(uploadedFilePath);
     }
 
     public synchronized void markProcessing() {

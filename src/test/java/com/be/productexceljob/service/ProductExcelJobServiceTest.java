@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.be.productexceljob.dto.ExcelDownloadResult;
+import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
 import com.be.userusage.service.UserUsageService;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
 class ProductExcelJobServiceTest {
     @TempDir
@@ -26,12 +28,19 @@ class ProductExcelJobServiceTest {
         ProductExcelProcessingService processingService = mock(ProductExcelProcessingService.class);
         UserUsageService userUsageService = mock(UserUsageService.class);
         Executor directExecutor = Runnable::run;
+        ProductExcelJobRepository repository = mock(ProductExcelJobRepository.class);
+        when(repository.save(any())).thenAnswer(invocation -> {
+            ProductExcelJob job = invocation.getArgument(0);
+            ReflectionTestUtils.setField(job, "jobId", 1L);
+            return job;
+        });
         ProductExcelJobService service = new ProductExcelJobService(
-                new ProductExcelJobRepository(),
+                repository,
                 validator,
                 processingService,
                 userUsageService,
-                directExecutor
+                directExecutor,
+                mock(PlatformTransactionManager.class)
         );
         ReflectionTestUtils.setField(service, "uploadDir", tempDirectory.toString());
         LocalDate usageDate = LocalDate.of(2026, 9, 8);

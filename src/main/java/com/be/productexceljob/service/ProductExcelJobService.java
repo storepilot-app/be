@@ -14,12 +14,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -35,7 +37,7 @@ public class ProductExcelJobService {
     private final UserUsageService userUsageService;
     @Qualifier("productExcelJobExecutor")
     private final Executor productExcelJobExecutor;
-    private final AtomicLong jobIdGenerator = new AtomicLong(1);
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${storepilot.upload-dir:uploads}")
     private String uploadDir;
@@ -45,9 +47,9 @@ public class ProductExcelJobService {
         int productCount = productExcelJobRequestValidator.validate(file, PRODUCT_NAME_COLUMN, KEYWORD_COUNT);
         LocalDate usageDate = userUsageService.reserveCategoryProducts(userId, productCount);
 
-        long jobId = jobIdGenerator.getAndIncrement();
+        Long jobId = null;
         String filename = safeFilename(file.getOriginalFilename());
-        Path jobDirectory = uploadRoot().resolve("product-excel-jobs").resolve(String.valueOf(jobId));
+        Path jobDirectory = uploadRoot().resolve("product-excel-jobs").resolve(UUID.randomUUID().toString());
         Path targetPath = jobDirectory.resolve(filename).normalize();
 
         ProductExcelJob job;
@@ -55,7 +57,6 @@ public class ProductExcelJobService {
             Files.createDirectories(jobDirectory);
             file.transferTo(targetPath);
             job = productExcelJobRepository.save(ProductExcelJob.register(
-                    jobId,
                     userId,
                     filename,
                     targetPath,
@@ -63,6 +64,7 @@ public class ProductExcelJobService {
                     productCount,
                     usageDate
             ));
+            jobId = job.getJobId();
             productExcelJobExecutor.execute(() -> processExcelJob(job)); // 작업을 요청 스레드가 아닌 전용 Executor에서 실행
             return ProductExcelJobCreateResponse.from(job);
         } catch (IOException error) {
@@ -92,9 +94,10 @@ public class ProductExcelJobService {
     }
 
     private void processExcelJob(ProductExcelJob job) {
-        job.markProcessing(); // 작업 상태를 처리 중으로 표시. 스레드 동작에 영향을 주지 않음
         try {
-            ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job);
+            job.markProcessing();
+            productExcelJobRepository.save(job);
+            ProductExcelJobProgressUpdater progressUpdater = new ProductExcelJobProgressUpdater(job, productExcelJobRepository);
             ExcelDownloadResult result = productExcelProcessingService.processExcel(
                     new ProductExcelProcessingRequest(
                             job.getUploadedFilePath(),
@@ -107,18 +110,22 @@ public class ProductExcelJobService {
                     ),
                     progressUpdater
             );
-            userUsageService.completeCategoryKeywordJob(
-                    job.getUserId(),
-                    job.getUsageDate(),
-                    job.getProductCount()
-            );
-            job.markCompleted(result.filename(), result.content()); // 작업 상태를 처리 완료로 표시. 스레드 동작에 영향을 주지 않음
+            new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+                userUsageService.completeCategoryKeywordJob(
+                        job.getUserId(),
+                        job.getUsageDate(),
+                        job.getProductCount()
+                );
+                job.markCompleted(result.filename(), result.content());
+                productExcelJobRepository.save(job);
+            });
         } catch (Exception error) {
             releaseReservedProducts(job.getUserId(), job.getUsageDate(), job.getProductCount(), null);
             String message = error.getMessage() == null || error.getMessage().isBlank()
                     ? "카테고리 찾기 작업에 실패했습니다."
                     : error.getMessage();
             job.markFailed(message); // 작업 상태를 실패로 표시. 스레드 동작에 영향을 주지 않음
+            productExcelJobRepository.save(job);
         } finally {
             deleteUploadedFile(job.getUploadedFilePath());
         }
@@ -136,7 +143,7 @@ public class ProductExcelJobService {
     }
 
     private ProductExcelJob findExcelJob(long jobId, Long userId) {
-        return productExcelJobRepository.findByIdAndUserId(jobId, userId)
+        return productExcelJobRepository.findByJobIdAndUserId(jobId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND, "작업을 찾을 수 없습니다."));
     }
 

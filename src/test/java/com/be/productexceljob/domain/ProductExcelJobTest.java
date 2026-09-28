@@ -11,7 +11,6 @@ class ProductExcelJobTest {
     void tracksBatchProgressAndCompletesAtOneHundredPercent() {
         ProductExcelJob job = ProductExcelJob.register(
                 1L,
-                1L,
                 "input.xlsx",
                 Path.of("input.xlsx"),
                 true,
