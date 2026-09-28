@@ -493,8 +493,8 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 | --- | --- |
 | 사용자·토큰·매핑·카테고리·문의·학습 요청 메타데이터·사용량 | MySQL |
 | 워터마크 이미지 | MySQL `user_watermarks.image_data` |
-| 엑셀 작업 상태·결과 바이트 | BE 메모리 (`ConcurrentHashMap`) |
-| 작업 원본 | `uploads/product-excel-jobs/{jobId}/` — 처리 종료 시 삭제 |
+| 엑셀 작업 상태·결과 바이트 | MySQL `product_excel_jobs` — 결과는 현재 LONGBLOB으로 저장 |
+| 작업 원본 | `uploads/product-excel-jobs/{UUID}/` — 처리 종료 시 삭제 |
 | 학습 요청 원본 | `uploads/training-product-requests/` — 관리자 삭제까지 보관 |
 | 네이버 카테고리 원본 | `uploads/naver-categories/versions/` — 최근 버전 디렉터리 5개 유지 |
 | 활성 카테고리 CSV | `uploads/naver-categories/active/naver_categories.csv` |
@@ -504,9 +504,9 @@ UPDATE storepilot_users SET role = 'ADMIN' WHERE email = 'admin@example.com';
 
 현재 구현의 범위와 개선이 필요한 부분은 다음과 같습니다.
 
-- **작업 영속화:** 재시작 시 작업 상태·결과와 메모리 큐가 사라집니다. 완료 결과의 만료·자동 정리도 없어 장기 실행 시 메모리 사용량이 증가할 수 있습니다.
+- **작업 영속화:** 작업 상태·진행률·결과는 JPA로 DB에 저장하며 ID는 DB에서 생성합니다. 완료 결과는 재시작 후에도 조회할 수 있지만, Executor의 대기·실행 작업은 재시작 후 자동으로 재개되지 않습니다. 결과 파일의 디스크 분리와 만료·자동 정리는 아직 구현하지 않았습니다.
 - **예약 복구:** 정상 예외 경로에서는 사용량을 반환하지만, 강제 종료나 DB 반환 실패 후 남은 예약을 자동 복구하는 기능은 없습니다.
-- **무중단·다중 인스턴스:** 작업 ID가 프로세스별 `AtomicLong`이고 저장소가 메모리이므로 인스턴스 간 공유와 재시작 복구를 구현해야 안전하게 확장할 수 있습니다.
+- **무중단·다중 인스턴스:** 같은 DB를 사용하는 인스턴스에서 작업 상태와 완료 결과를 조회할 수 있습니다. 안전한 무중단 배포를 위해서는 기존 Executor 작업 종료 대기와 중단 작업 복구 정책이 추가로 필요합니다.
 - **외부 호출과 트랜잭션:** 네이버 카테고리 업로드는 DB·파일·AI 호출을 하나의 흐름에서 수행합니다. DB 롤백이 파일·외부 인덱스까지 원복하지 않으며, 추가 상품 반영도 DB와 AI 사이의 원자성을 보장하지 않습니다.
 - **예측 실패 구분:** 카테고리 예측의 HTTP 예외는 빈 결과로 처리됩니다. AI 장애가 `매칭없음` 결과로 나타나면서 작업은 완료되고 사용량이 기록될 수 있습니다.
 - **DB 변경:** `ddl-auto: update`를 사용하며 Flyway/Liquibase 마이그레이션은 도입하지 않았습니다.
