@@ -224,7 +224,7 @@ AI 서버가 예측한 네이버 카테고리를 사용자가 등록한 마이�
 | 계정 | `GET /auth/me`, `DELETE /auth/me` | 내 정보·탈퇴 |
 | 매핑 | `GET /my-category-mappings`, `POST /my-category-mappings/upload` | 조회·교체 |
 | 엑셀 작업 | `POST /product-excel-jobs` | `file`, `includeSelectionDetails`로 작업 생성 |
-| 엑셀 작업 | `GET /product-excel-jobs/{jobId}/status`, `/{jobId}/download` | 내 작업 상태·결과 |
+| 엑셀 작업 | `GET /product-excel-jobs/results`, `/{jobId}/status`, `/{jobId}/download` | 내 완료 결과 목록·작업 상태·결과 다운로드 |
 | 이미지 | `POST /product-excel-jobs/images/prepare`, `/download`, `/failures/excel` | 목록·단건 다운로드·실패 엑셀 |
 | 워터마크 | `GET`, `PUT`, `DELETE /users/me/watermark`, `GET /users/me/watermark/image` | 설정 및 이미지 관리 |
 | 학습 요청 | `POST`, `GET /training-product-requests` | 파일 접수·내 목록 |

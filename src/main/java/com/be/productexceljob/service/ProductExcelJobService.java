@@ -7,6 +7,7 @@ import com.be.productexceljob.domain.ProductExcelJob;
 import com.be.productexceljob.domain.ProductExcelJobStatus;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
+import com.be.productexceljob.dto.ProductExcelJobResultResponse;
 import com.be.productexceljob.repository.ProductExcelJobRepository;
 import com.be.userusage.service.UserUsageService;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.Instant;
 import java.util.concurrent.Executor;
 import java.util.UUID;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,6 +25,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -83,6 +86,15 @@ public class ProductExcelJobService {
     public ProductExcelJobStatusResponse getExcelJobStatus(long jobId, Long userId) {
         ProductExcelJob job = findExcelJob(jobId, userId);
         return ProductExcelJobStatusResponse.from(job);
+    }
+
+    public List<ProductExcelJobResultResponse> getRecentExcelResults(Long userId) {
+        validateUserId(userId);
+        return productExcelJobRepository.findRecentCompletedResults(
+                userId,
+                Instant.now(),
+                PageRequest.of(0, 100)
+        );
     }
 
     public ExcelDownloadResult getExcelDownloadResult(long jobId, Long userId) {

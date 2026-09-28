@@ -6,6 +6,7 @@ import com.be.global.response.CommonResponse;
 import com.be.productexceljob.dto.ExcelDownloadResult;
 import com.be.productexceljob.dto.ProductExcelJobCreateResponse;
 import com.be.productexceljob.dto.ProductExcelJobStatusResponse;
+import com.be.productexceljob.dto.ProductExcelJobResultResponse;
 import com.be.productexceljob.service.ProductExcelJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/product-excel-jobs")
@@ -58,6 +60,14 @@ public class ProductExcelJobController {
             @PathVariable long jobId
     ) {
         return CommonResponse.success(productExcelJobService.getExcelJobStatus(jobId, loginUser.id()));
+    }
+
+    @Operation(summary = "보관 중인 상품 엑셀 결과 목록 조회")
+    @GetMapping("/results")
+    public CommonResponse<List<ProductExcelJobResultResponse>> results(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        return CommonResponse.success(productExcelJobService.getRecentExcelResults(loginUser.id()));
     }
 
     @Operation(summary = "완료된 상품 엑셀 결과 다운로드")

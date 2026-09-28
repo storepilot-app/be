@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
 
 @SpringBootTest
 @Transactional
@@ -48,6 +49,14 @@ class ProductExcelJobRepositoryTest {
         assertThat(completed.getResultContent()).isNull();
         assertThat(completed.getResultFilePath()).isEqualTo(jobId + "/result.xlsx");
         assertThat(repository.findByJobIdAndUserId(jobId, 2L)).isEmpty();
+        var results = repository.findRecentCompletedResults(1L, Instant.now(), PageRequest.of(0, 100));
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.jobId()).isEqualTo(jobId);
+            assertThat(result.filename()).isEqualTo("result.xlsx");
+            assertThat(result.productCount()).isEqualTo(3);
+            assertThat(result.resultExpired()).isFalse();
+        });
+        assertThat(repository.findRecentCompletedResults(2L, Instant.now(), PageRequest.of(0, 100))).isEmpty();
         assertThat(repository.saveAndFlush(newJob()).getJobId()).isNotEqualTo(jobId);
     }
 
