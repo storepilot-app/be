@@ -13,23 +13,27 @@ import com.be.trainingproduct.domain.ProductCategoryFeedback;
 import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
+import java.time.Instant;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class ProductCategoryFeedbackServiceTest {
-    @Test
-    void storesFeedbackAndUpdatesIndexAndStats() {
-        TrainingProductAiClient aiClient = mock(TrainingProductAiClient.class);
-        MyCategoryMappingQueryService mappingQueryService = mock(MyCategoryMappingQueryService.class);
-        ProductCategoryFeedbackRepository repository = mock(ProductCategoryFeedbackRepository.class);
-        ProductCategoryStatService statService = mock(ProductCategoryStatService.class);
-        ProductCategoryFeedbackService service = new ProductCategoryFeedbackService(
-                aiClient,
-                mappingQueryService,
-                repository,
-                statService
-        );
-        MyCategoryMapping mapping = MyCategoryMapping.create(
+    private TrainingProductAiClient aiClient;
+    private MyCategoryMappingQueryService mappingQueryService;
+    private ProductCategoryFeedbackRepository repository;
+    private ProductCategoryStatService statService;
+    private ProductCategoryFeedbackService service;
+    private MyCategoryMapping mapping;
+
+    @BeforeEach
+    void setUp() {
+        aiClient = mock(TrainingProductAiClient.class);
+        mappingQueryService = mock(MyCategoryMappingQueryService.class);
+        repository = mock(ProductCategoryFeedbackRepository.class);
+        statService = mock(ProductCategoryStatService.class);
+        service = new ProductCategoryFeedbackService(aiClient, mappingQueryService, repository, statService);
+        mapping = MyCategoryMapping.create(
                 1L,
                 "MY1",
                 "500",
@@ -38,10 +42,14 @@ class ProductCategoryFeedbackServiceTest {
                 "생활/건강 > 의료용품"
         );
         when(mappingQueryService.getRequiredResolvedMapping(1L, "MY1")).thenReturn(mapping);
-        when(repository.findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(any(), any()))
-                .thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(aiClient.addProductFeedback(any())).thenReturn(new ProductFeedbackAiResponse(1L, 100, "ok"));
+    }
+
+    @Test
+    void storesFeedbackAndUpdatesIndexAndStats() {
+        when(repository.findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(Optional.empty());
 
         var response = service.addFeedback(
                 1L,
@@ -53,5 +61,26 @@ class ProductCategoryFeedbackServiceTest {
         verify(repository).save(any(ProductCategoryFeedback.class));
         verify(aiClient).addProductFeedback(any());
         verify(statService).increaseStat(1L, mapping);
+    }
+
+    @Test
+    void movesStatsWhenProductAlreadyHasFeedback() {
+        var previousFeedback = ProductCategoryFeedback.create(
+                1L,
+                "테스트 상품",
+                "테스트상품",
+                "previous-key",
+                "OLD",
+                20L,
+                "400",
+                "기존 카테고리",
+                Instant.now()
+        );
+        when(repository.findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(Optional.of(previousFeedback));
+
+        service.addFeedback(1L, new ProductCategoryFeedbackRequest("테스트 상품", "MY1"));
+
+        verify(statService).moveStat(1L, "400", mapping);
     }
 }
