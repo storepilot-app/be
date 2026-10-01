@@ -12,6 +12,7 @@ import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.dto.ProductMappingPreviewResponse;
 import com.be.trainingproduct.service.TrainingProductService;
+import com.be.trainingproduct.service.ProductCategoryFeedbackService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class TrainingProductController {
     private final TrainingProductService trainingProductService;
+    private final ProductCategoryFeedbackService productCategoryFeedbackService;
 
     @Operation(summary = "상품 카테고리 매핑 확인", description = "두 엑셀을 비교합니다. DB 저장이나 AI 호출은 수행하지 않습니다.")
     @PostMapping(value = "/mapping-preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -111,7 +113,7 @@ public class TrainingProductController {
             @RequestBody ProductCategoryFeedbackRequest request
     ) {
         requireAdmin(loginUser);
-        ProductCategoryFeedbackResponse response = trainingProductService.addFeedback(loginUser.id(), request);
+        ProductCategoryFeedbackResponse response = productCategoryFeedbackService.addFeedback(loginUser.id(), request);
         return CommonResponse.success(response, response.message());
     }
 
