@@ -2,87 +2,52 @@ package com.be.trainingproduct.service;
 
 import com.be.global.exception.BusinessException;
 import com.be.global.exception.ErrorCode;
-import com.be.global.excel.ExcelCellReader;
-import com.be.global.excel.ExcelHeaderLookup;
 import com.be.mycategory.domain.MyCategoryMapping;
-import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.mycategory.service.MyCategoryMappingUploadService;
-import com.be.trainingproduct.domain.ProductCategoryFeedback;
 import com.be.trainingproduct.client.TrainingProductAiClient;
 import com.be.trainingproduct.dto.CategoryMatchMappingItem;
-import com.be.trainingproduct.dto.ProductCategoryFeedbackRequest;
-import com.be.trainingproduct.dto.ProductCategoryFeedbackResponse;
 import com.be.trainingproduct.dto.ProductCategoryStatsResponse;
 import com.be.trainingproduct.dto.ProductFeedbackBatchAiRequest;
 import com.be.trainingproduct.dto.ProductFeedbackAiRequest;
-import com.be.trainingproduct.dto.ProductFeedbackAiResponse;
 import com.be.trainingproduct.dto.ProductIndexAppendResponse;
 import com.be.trainingproduct.dto.ProductIndexRebuildResponse;
 import com.be.trainingproduct.dto.ProductMappingPreviewResponse;
-import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
-import java.util.HexFormat;
+import com.be.trainingproduct.service.TrainingProductExcelReader.TrainingProductExcelRow;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
 public class TrainingProductService {
-    private static final List<String> PRODUCT_NAME_HEADERS = List.of("상품명");
-    private static final List<String> MY_CATEGORY_HEADERS = List.of("마이카테", "마이카테고리", "마이카테고리코드");
-
     private final TrainingProductAiClient trainingProductAiClient;
-    private final MyCategoryMappingQueryService myCategoryMappingQueryService;
     private final MyCategoryMappingUploadService myCategoryMappingUploadService;
-    private final ProductCategoryFeedbackRepository productCategoryFeedbackRepository;
-    private final ProductCategoryStatService productCategoryStatService;
+    private final TrainingProductExcelReader trainingProductExcelReader;
 
     public ProductMappingPreviewResponse previewMappings(Long userId, MultipartFile file, MultipartFile myCategoryFile) {
         validateUserId(userId);
-        validateFiles(file == null ? List.of() : List.of(file));
+        trainingProductExcelReader.validateFiles(file == null ? List.of() : List.of(file));
         Map<String, MyCategoryMapping> mappings = new HashMap<>();
         myCategoryMappingUploadService.readMappings(myCategoryFile, userId)
                 .forEach(mapping -> mappings.put(mapping.getMyCategoryCode(), mapping));
         List<ProductMappingPreviewResponse.Item> products = new ArrayList<>();
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            if (workbook.getNumberOfSheets() == 0) {
-                throw invalid("상품 엑셀에 시트가 없습니다.");
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            TrainingProductColumns columns = resolveColumns(sheet);
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
-                String name = ExcelCellReader.readTrimmed(row, columns.productNameColumnIndex(), formatter);
-                if (name.isBlank()) continue;
-                String code = ExcelCellReader.readTrimmed(row, columns.myCategoryColumnIndex(), formatter);
-                MyCategoryMapping mapping = mappings.get(code);
-                String reason = code.isBlank() ? "마이카테 코드가 없습니다."
-                        : mapping == null ? "매핑 파일에 해당 마이카테 코드가 없습니다."
-                        : mapping.getNaverCategoryId() == null ? "활성 네이버 카테고리에 없는 코드입니다." : null;
-                products.add(new ProductMappingPreviewResponse.Item(i + 1, name, code,
-                        mapping == null ? null : mapping.getNaverCategoryValue(),
-                        mapping == null ? null : mapping.getNaverCategoryFullPath(), reason));
-            }
-        } catch (IOException e) {
-            throw invalid("상품 엑셀 파일을 읽지 못했습니다.");
+        for (TrainingProductExcelRow row : trainingProductExcelReader.readRows(file)) {
+            MyCategoryMapping mapping = mappings.get(row.myCategoryCode());
+            String reason = row.myCategoryCode().isBlank() ? "마이카테 코드가 없습니다."
+                    : mapping == null ? "매핑 파일에 해당 마이카테 코드가 없습니다."
+                    : mapping.getNaverCategoryId() == null ? "활성 네이버 카테고리에 없는 코드입니다." : null;
+            products.add(new ProductMappingPreviewResponse.Item(
+                    row.rowNumber(),
+                    row.productName(),
+                    row.myCategoryCode(),
+                    mapping == null ? null : mapping.getNaverCategoryValue(),
+                    mapping == null ? null : mapping.getNaverCategoryFullPath(),
+                    reason
+            ));
         }
         return new ProductMappingPreviewResponse(products);
     }
@@ -93,7 +58,7 @@ public class TrainingProductService {
             MultipartFile myCategoryFile
     ) {
         validateUserId(userId);
-        validateFiles(files);
+        trainingProductExcelReader.validateFiles(files);
         List<MyCategoryMapping> resolvedMappings = myCategoryMappingUploadService.readResolvedMappings(
                 myCategoryFile,
                 userId
@@ -110,7 +75,6 @@ public class TrainingProductService {
 
     public ProductCategoryStatsResponse getCategoryStats(Long userId) {
         validateUserId(userId);
-        validateUserId(userId);
         return trainingProductAiClient.getSharedCategoryStats();
     }
 
@@ -120,7 +84,7 @@ public class TrainingProductService {
             MultipartFile myCategoryFile
     ) {
         validateUserId(userId);
-        validateFiles(files);
+        trainingProductExcelReader.validateFiles(files);
         List<MyCategoryMapping> resolvedMappings = myCategoryMappingUploadService.readResolvedMappings(
                 myCategoryFile,
                 userId
@@ -129,7 +93,10 @@ public class TrainingProductService {
             throw invalid("업로드한 마이카테고리 파일에 유효한 네이버 카테고리 매핑이 없습니다.");
         }
 
-        ProductAppendRows rows = collectProductAppendRows(files, resolvedMappings);
+        ProductAppendRows rows = collectProductAppendRows(
+                trainingProductExcelReader.readRows(files),
+                resolvedMappings
+        );
         if (rows.candidates().isEmpty()) {
             throw invalid("기존 상품 인덱스에 추가할 수 있는 유효 상품 행이 없습니다.");
         }
@@ -161,46 +128,8 @@ public class TrainingProductService {
         );
     }
 
-    @Transactional
-    public ProductCategoryFeedbackResponse addFeedback(Long userId, ProductCategoryFeedbackRequest request) {
-        if (request == null) {
-            throw invalid("피드백 요청 정보가 필요합니다.");
-        }
-        validateUserId(userId);
-        String productName = required(request.productName(), "상품명은 필수입니다.");
-        String myCategoryCode = required(request.myCategoryCode(), "마이카테고리 코드는 필수입니다.");
-        MyCategoryMapping mapping = myCategoryMappingQueryService
-                .getRequiredResolvedMapping(userId, myCategoryCode);
-        String normalizedProductName = normalizeProductName(productName);
-        String normalizedProductKey = normalizedProductKey(normalizedProductName);
-        ProductCategoryFeedback previousFeedback = productCategoryFeedbackRepository
-                .findFirstByUserIdAndNormalizedProductKeyOrderByCreatedAtDesc(userId, normalizedProductKey)
-                .orElse(null);
-
-        ProductCategoryFeedback feedback = productCategoryFeedbackRepository.save(ProductCategoryFeedback.create(
-                userId,
-                productName,
-                normalizedProductName,
-                normalizedProductKey,
-                myCategoryCode,
-                mapping.getNaverCategoryId(),
-                mapping.getNaverCategoryCode(),
-                mapping.getNaverCategoryFullPath(),
-                Instant.now()
-        ));
-        ProductFeedbackAiResponse aiResponse = trainingProductAiClient.addProductFeedback(
-                ProductFeedbackAiRequest.from(feedback)
-        );
-        if (previousFeedback == null) {
-            productCategoryStatService.increaseStat(userId, mapping);
-        } else {
-            productCategoryStatService.moveStat(userId, previousFeedback.getNaverCategoryCode(), mapping);
-        }
-        return ProductCategoryFeedbackResponse.from(feedback, aiResponse);
-    }
-
     private ProductAppendRows collectProductAppendRows(
-            List<MultipartFile> files,
+            List<TrainingProductExcelRow> productRows,
             List<MyCategoryMapping> resolvedMappings
     ) {
         Map<String, MyCategoryMapping> mappingsByMyCategory = new HashMap<>();
@@ -209,117 +138,23 @@ public class TrainingProductService {
         }
 
         List<ProductAppendCandidate> candidates = new ArrayList<>();
-        DataFormatter formatter = new DataFormatter(Locale.KOREA);
-        int sourceRowCount = 0;
         int unmappedRowCount = 0;
 
-        for (MultipartFile file : files) {
-            try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-                Sheet sheet = workbook.getSheetAt(0);
-                TrainingProductColumns columns = resolveColumns(sheet);
-                for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                    Row row = sheet.getRow(rowIndex);
-                    if (row == null) {
-                        continue;
-                    }
-
-                    String productName = ExcelCellReader.readTrimmed(row, columns.productNameColumnIndex(), formatter);
-                    if (productName.isBlank()) {
-                        continue;
-                    }
-                    sourceRowCount++;
-
-                    String myCategoryCode = ExcelCellReader.readTrimmed(row, columns.myCategoryColumnIndex(), formatter);
-                    MyCategoryMapping mapping = mappingsByMyCategory.get(myCategoryCode);
-                    if (mapping == null) {
-                        unmappedRowCount++;
-                        continue;
-                    }
-
-                    candidates.add(new ProductAppendCandidate(productName, mapping));
-                }
-            } catch (IOException e) {
-                throw invalid("기존 상품 엑셀 파일을 읽지 못했습니다.");
+        for (TrainingProductExcelRow productRow : productRows) {
+            MyCategoryMapping mapping = mappingsByMyCategory.get(productRow.myCategoryCode());
+            if (mapping == null) {
+                unmappedRowCount++;
+                continue;
             }
+            candidates.add(new ProductAppendCandidate(productRow.productName(), mapping));
         }
 
-        return new ProductAppendRows(sourceRowCount, unmappedRowCount, candidates);
-    }
-
-
-    private TrainingProductColumns resolveColumns(Sheet sheet) {
-        Row headerRow = sheet.getRow(0);
-        if (headerRow == null) {
-            throw invalid("기존 상품 엑셀 파일의 헤더 행이 비어 있습니다.");
-        }
-
-        ExcelHeaderLookup headers = ExcelHeaderLookup.from(headerRow);
-        return new TrainingProductColumns(
-                findRequiredColumnIndex(headers, PRODUCT_NAME_HEADERS, "상품명"),
-                findRequiredColumnIndex(headers, MY_CATEGORY_HEADERS, "마이카테고리")
-        );
-    }
-
-    private int findRequiredColumnIndex(
-            ExcelHeaderLookup headerLookup,
-            List<String> acceptedHeaders,
-            String displayName
-    ) {
-        int index = headerLookup.findFirstNormalized(acceptedHeaders);
-        if (index < 0) {
-            throw invalid("기존 상품 엑셀 파일에 필요한 헤더가 없습니다: " + displayName);
-        }
-        return index;
-    }
-
-    private void validateFiles(List<MultipartFile> files) {
-        // 파일이 아예 없는 경우
-        if (files == null || files.isEmpty()) {
-            throw invalid("기존 상품 엑셀 파일을 하나 이상 업로드해 주세요.");
-        }
-
-        // 업로드된 파일 중 하나라도 잘못됐는지 확인
-        boolean invalidFile = files.stream().anyMatch(file ->
-                file == null
-                        || file.isEmpty()
-                        || file.getOriginalFilename() == null
-                        || !isExcelFilename(file.getOriginalFilename())
-        );
-        if (invalidFile) {
-            throw invalid("기존 상품 파일은 비어 있지 않은 .xlsx 형식이어야 합니다.");
-        }
-    }
-
-    private boolean isExcelFilename(String filename) {
-        return filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
+        return new ProductAppendRows(productRows.size(), unmappedRowCount, candidates);
     }
 
     private void validateUserId(Long userId) {
         if (userId == null) {
             throw invalid("로그인이 필요합니다.");
-        }
-    }
-
-    private String required(String value, String message) {
-        if (value == null || value.isBlank()) {
-            throw invalid(message);
-        }
-        return value.trim();
-    }
-
-    private String normalizeProductName(String productName) {
-        return productName == null
-                ? ""
-                : productName.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizedProductKey(String normalizedProductName) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(normalizedProductName.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm is not available.", e);
         }
     }
 
@@ -341,9 +176,4 @@ public class TrainingProductService {
     ) {
     }
 
-    private record TrainingProductColumns(
-            int productNameColumnIndex,
-            int myCategoryColumnIndex
-    ) {
-    }
 }

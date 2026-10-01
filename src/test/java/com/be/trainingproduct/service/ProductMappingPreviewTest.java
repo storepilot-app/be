@@ -10,7 +10,6 @@ import com.be.mycategory.domain.MyCategoryMapping;
 import com.be.mycategory.service.MyCategoryMappingUploadService;
 import com.be.trainingproduct.client.TrainingProductAiClient;
 import com.be.trainingproduct.controller.TrainingProductController;
-import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -22,9 +21,7 @@ class ProductMappingPreviewTest {
     void showsMatchedMissingAndUnknownMappingsWithoutWritingOrCallingAi() throws Exception {
         var mappings = mock(MyCategoryMappingUploadService.class);
         var ai = mock(TrainingProductAiClient.class);
-        var feedbacks = mock(ProductCategoryFeedbackRepository.class);
-        var stats = mock(ProductCategoryStatService.class);
-        var service = new TrainingProductService(ai, null, mappings, feedbacks, stats);
+        var service = new TrainingProductService(ai, mappings, new TrainingProductExcelReader());
         var mappingFile = new MockMultipartFile("myCategoryFile", new byte[]{1});
         when(mappings.readMappings(mappingFile, 1L)).thenReturn(List.of(
                 MyCategoryMapping.create(1L, "001", "500", 10L, "500", "의류 > 셔츠"),
@@ -39,7 +36,7 @@ class ProductMappingPreviewTest {
         assertThat(result.products().get(2).reason()).contains("코드가 없습니다");
         assertThat(result.products().get(3).naverCategoryCode()).isEqualTo("999");
         assertThat(result.products().get(3).reason()).contains("활성 네이버");
-        verifyNoInteractions(ai, feedbacks, stats);
+        verifyNoInteractions(ai);
         verify(mappings).readMappings(mappingFile, 1L);
         verifyNoMoreInteractions(mappings);
     }
@@ -47,7 +44,7 @@ class ProductMappingPreviewTest {
     @Test
     void rejectsMissingProductHeader() throws Exception {
         var mappings = mock(MyCategoryMappingUploadService.class);
-        var service = new TrainingProductService(null, null, mappings, null, null);
+        var service = new TrainingProductService(null, mappings, new TrainingProductExcelReader());
         var file = excel("마이카테", "잘못된헤더", new String[][]{});
         assertThatThrownBy(() -> service.previewMappings(1L, file, null))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("상품명");
@@ -56,7 +53,7 @@ class ProductMappingPreviewTest {
     @Test
     void rejectsNonAdminBeforeReadingFiles() {
         var service = mock(TrainingProductService.class);
-        var controller = new TrainingProductController(service);
+        var controller = new TrainingProductController(service, mock(ProductCategoryFeedbackService.class));
         assertThatThrownBy(() -> controller.previewMappings(new LoginUser(1L, "user@example.com", UserRole.USER), null, null))
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> controller.previewMappings(null, null, null)).isInstanceOf(BusinessException.class);

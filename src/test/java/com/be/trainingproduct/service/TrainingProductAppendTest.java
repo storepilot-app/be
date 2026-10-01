@@ -5,11 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.be.mycategory.domain.MyCategoryMapping;
-import com.be.mycategory.service.MyCategoryMappingQueryService;
 import com.be.mycategory.service.MyCategoryMappingUploadService;
 import com.be.trainingproduct.client.TrainingProductAiClient;
 import com.be.trainingproduct.dto.ProductIndexAppendAiResponse;
-import com.be.trainingproduct.repository.ProductCategoryFeedbackRepository;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -21,9 +19,7 @@ class TrainingProductAppendTest {
     void appendUsesIndexCountsWithoutFeedbackOrStatDatabaseCalls() throws Exception {
         var ai = mock(TrainingProductAiClient.class);
         var mappings = mock(MyCategoryMappingUploadService.class);
-        var feedback = mock(ProductCategoryFeedbackRepository.class);
-        var stats = mock(ProductCategoryStatService.class);
-        var service = new TrainingProductService(ai, mock(MyCategoryMappingQueryService.class), mappings, feedback, stats);
+        var service = new TrainingProductService(ai, mappings, new TrainingProductExcelReader());
         var mapping = mock(MyCategoryMapping.class);
         when(mapping.getMyCategoryCode()).thenReturn("MY1");
         when(mapping.getNaverCategoryId()).thenReturn(1L);
@@ -49,7 +45,6 @@ class TrainingProductAppendTest {
             assertEquals(0, result.insertedProductCount());
             assertEquals(1, result.updatedProductCount());
             assertEquals(100, result.indexedProductCount());
-            verifyNoInteractions(feedback, stats);
         }
     }
 }
